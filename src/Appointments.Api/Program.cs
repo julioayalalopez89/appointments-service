@@ -40,7 +40,8 @@ app.MapControllers();
 app.MapHealthChecks("/healthz");
 
 // Simple root so hitting the service root confirms it's up.
-app.MapGet("/", () => Results.Ok(new { service = "Appointments.Api", status = "running" }));
+//app.MapGet("/", () => Results.Ok(new { service = "Appointments.Api", status = "running" }));
+app.MapGet("/", () => Results.Ok(new { service = "Appointments.Api", status = "running", version = "1.1" }));
 
 app.Run();
 
