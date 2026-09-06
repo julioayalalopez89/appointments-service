@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: appointments-api
+  namespace: appointments
+  labels:
+    app: appointments-api
+spec:
+  replicas: 1
+  # NOTE: keep replicas at 1 while this service still uses the in-memory
+  # store (InMemoryAppointmentRepository). Scaling past 1 replica with that
+  # store means each pod has its own separate list of appointments — switch
+  # to a real database first (see README "Next steps").
+  selector:
+    matchLabels:
+      app: appointments-api
+  template:
+    metadata:
+      labels:
+        app: appointments-api
+    spec:
+      containers:
+        - name: appointments-api
+          # This exact string is replaced by the deploy workflow with
+          # <acr-login-server>/appointments-api:<git-sha> before kubectl apply.
+          image: IMAGE_PLACEHOLDER
+          ports:
+            - containerPort: 8080
+          env:
+            - name: Cors__AllowedOrigins__0
+              value: "https://305hairstyle.com"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"

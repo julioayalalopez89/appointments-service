@@ -1,0 +1,30 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 18
+VisualStudioVersion = 18.1.11312.151 d18.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{3CCB7C1E-6EB4-4E6C-9CEC-20BE0E850779}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Appointments.Api", "src\Appointments.Api\Appointments.Api.csproj", "{921E4C8C-6EA1-4BC9-AADB-2C0EC610214F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{921E4C8C-6EA1-4BC9-AADB-2C0EC610214F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{921E4C8C-6EA1-4BC9-AADB-2C0EC610214F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{921E4C8C-6EA1-4BC9-AADB-2C0EC610214F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{921E4C8C-6EA1-4BC9-AADB-2C0EC610214F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{921E4C8C-6EA1-4BC9-AADB-2C0EC610214F} = {3CCB7C1E-6EB4-4E6C-9CEC-20BE0E850779}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {ED7A0CDE-955B-4882-9312-4F6CDD5BF3D9}
+	EndGlobalSection
+EndGlobal
