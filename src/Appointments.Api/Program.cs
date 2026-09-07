@@ -1,16 +1,25 @@
+using Appointments.Api.Data;
 using Appointments.Api.Repositories;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
-builder.Services.AddSingleton<IAppointmentRepository, InMemoryAppointmentRepository>();
+
+var connectionString = builder.Configuration.GetConnectionString("AppointmentsDb")
+    ?? throw new InvalidOperationException(
+        "Connection string 'AppointmentsDb' not found. Set it via the ConnectionStrings__AppointmentsDb environment variable.");
+
+builder.Services.AddDbContext<AppointmentsDbContext>(options =>
+    options.UseSqlServer(connectionString));
+
+// Scoped (not Singleton) porque depende del DbContext, que también es Scoped.
+builder.Services.AddScoped<IAppointmentRepository, EfAppointmentRepository>();
+
 builder.Services.AddHealthChecks();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Allow the frontend (e.g. the salon's Next.js site) to call this API from
-// a different origin. Tighten this to your real site's domain(s) before
-// going to production.
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
     ?? new[] { "http://localhost:3000" };
 
@@ -24,8 +33,14 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Swagger UI only in Development — don't expose the API's schema publicly
-// once this is deployed.
+// Aplica las migraciones automáticamente al arrancar — crea las tablas la
+// primera vez, sin que tengas que correr un comando aparte en producción.
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppointmentsDbContext>();
+    db.Database.Migrate();
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -35,15 +50,9 @@ if (app.Environment.IsDevelopment())
 app.UseCors();
 app.UseAuthorization();
 app.MapControllers();
-
-// Liveness/readiness probe for Kubernetes and load balancers.
 app.MapHealthChecks("/healthz");
-
-// Simple root so hitting the service root confirms it's up.
-//app.MapGet("/", () => Results.Ok(new { service = "Appointments.Api", status = "running" }));
 app.MapGet("/", () => Results.Ok(new { service = "Appointments.Api", status = "running", version = "1.1" }));
 
 app.Run();
 
-// Needed so WebApplicationFactory<Program> works in integration tests later.
 public partial class Program { }
