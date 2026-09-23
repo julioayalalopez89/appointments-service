@@ -64,6 +64,31 @@ time returns `409 Conflict` — the double-booking check is already built in.
 Swagger UI (interactive API docs) is at `/swagger` when running in
 Development — `dotnet run` opens it in your browser automatically.
 
+## Configuración del negocio (horario y capacidad)
+
+La sección `Business` de `appsettings.json` define las reglas para calcular
+huecos libres. Se valida al arrancar: si algo está mal, la app no arranca y
+el log dice qué corregir.
+
+| Clave | Por defecto | Qué es |
+|---|---|---|
+| `TimeZone` | `America/New_York` | Zona horaria IANA del negocio |
+| `SlotIntervalMinutes` | `15` | Cada cuántos minutos empieza un hueco reservable |
+| `MaxConcurrentAppointments` | `1` | Citas simultáneas sin estilista asignado (sillas/estilistas) |
+| `OpeningHours` | Mar–Vie 9:00–19:00, Sáb 9:00–17:00 | Horario por día; un día que no aparece está cerrado |
+
+> ⚠️ El horario incluido es **de ejemplo** hasta confirmar el horario real del salón.
+
+En Azure Container Apps se sobrescribe con variables de entorno, por ejemplo:
+
+```
+Business__TimeZone=America/New_York
+Business__MaxConcurrentAppointments=2
+Business__OpeningHours__0__Day=Tuesday
+Business__OpeningHours__0__Open=09:00
+Business__OpeningHours__0__Close=19:00
+```
+
 ## Run it in Docker
 
 ```bash
