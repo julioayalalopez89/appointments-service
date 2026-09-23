@@ -71,8 +71,32 @@ jobs:
             --image "${{ needs.build-and-push.outputs.image }}"
 
       - name: Show public URL
+        id: url
         run: |
-          az containerapp show \
+          FQDN=$(az containerapp show \
             --name "${{ env.CONTAINERAPP_NAME }}" \
             --resource-group "${{ vars.AKS_RESOURCE_GROUP }}" \
-            --query properties.configuration.ingress.fqdn -o tsv
+            --query properties.configuration.ingress.fqdn -o tsv)
+          echo "fqdn=$FQDN" >> "$GITHUB_OUTPUT"
+          echo "### API desplegada: https://$FQDN" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://$FQDN"
+
+      # Comprueba que la nueva versión arrancó de verdad. Container Apps tarda
+      # un poco en activar la revisión nueva, así que reintenta hasta ~3 min.
+      # Si /healthz nunca responde 200, el workflow falla y lo verás en rojo.
+      - name: Smoke test (/healthz)
+        run: |
+          URL="https://${{ steps.url.outputs.fqdn }}"
+          for i in $(seq 1 18); do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$URL/healthz" || echo 000)
+            echo "Intento $i: /healthz -> $CODE"
+            if [ "$CODE" = "200" ]; then
+              echo "Raíz de la API:"
+              curl -s --max-time 10 "$URL/"; echo
+              echo "✅ Smoke test OK" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "❌ /healthz no respondió 200 tras el deploy" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
