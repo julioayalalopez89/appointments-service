@@ -1,10 +1,19 @@
 using Appointments.Api.Data;
+using Appointments.Api.Configuration;
 using Appointments.Api.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+
+// Horario del negocio, zona horaria y capacidad. Se valida al arrancar:
+// una configuración inválida detiene la app con un mensaje claro.
+builder.Services.AddSingleton<IValidateOptions<BusinessOptions>, BusinessOptionsValidator>();
+builder.Services.AddOptions<BusinessOptions>()
+    .Bind(builder.Configuration.GetSection(BusinessOptions.SectionName))
+    .ValidateOnStart();
 
 var connectionString = builder.Configuration.GetConnectionString("AppointmentsDb")
     ?? throw new InvalidOperationException(
