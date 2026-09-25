@@ -66,13 +66,14 @@ public class EfAppointmentRepository : IAppointmentRepository
         return true;
     }
 
-    public bool HasConflict(string? providerName, DateTimeOffset start, DateTimeOffset end, Guid? excludingId = null)
+    public IReadOnlyList<Appointment> GetOverlapping(DateTimeOffset start, DateTimeOffset end, Guid? excludingId = null)
     {
-        return _db.Appointments.Any(a =>
-            a.Id != excludingId &&
-            a.Status != AppointmentStatus.Cancelled &&
-            (a.ProviderName ?? "") == (providerName ?? "") &&
-            a.StartTime < end &&
-            start < a.StartTime.AddMinutes(a.DurationMinutes));
+        return _db.Appointments
+            .Where(a =>
+                a.Id != excludingId &&
+                a.Status != AppointmentStatus.Cancelled &&
+                a.StartTime < end &&
+                start < a.StartTime.AddMinutes(a.DurationMinutes))
+            .ToList();
     }
 }

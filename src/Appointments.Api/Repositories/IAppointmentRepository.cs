@@ -15,6 +15,9 @@ public interface IAppointmentRepository
     bool Update(Appointment appointment);
     bool Delete(Guid id);
 
-    /// <summary>True if the given time range overlaps an existing, non-cancelled appointment for the same provider.</summary>
-    bool HasConflict(string? providerName, DateTimeOffset start, DateTimeOffset end, Guid? excludingId = null);
+    /// <summary>
+    /// Non-cancelled appointments (any provider) that overlap [start, end).
+    /// The conflict rules themselves live in <see cref="Services.BookingRules"/>.
+    /// </summary>
+    IReadOnlyList<Appointment> GetOverlapping(DateTimeOffset start, DateTimeOffset end, Guid? excludingId = null);
 }

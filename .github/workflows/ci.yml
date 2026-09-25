@@ -1,4 +1,4 @@
-# Fast feedback on pull requests: just build the project. No Azure access
+# Fast feedback on pull requests: build the solution and run the unit tests. No Azure access
 # needed, so this runs safely on every PR without any secrets configured.
 
 name: CI
@@ -24,3 +24,6 @@ jobs:
 
       - name: Build
         run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release --logger "console;verbosity=normal"
