@@ -15,6 +15,9 @@ builder.Services.AddOptions<BusinessOptions>()
     .Bind(builder.Configuration.GetSection(BusinessOptions.SectionName))
     .ValidateOnStart();
 
+// Reloj inyectable: en los tests se sustituye por una hora fija.
+builder.Services.AddSingleton(TimeProvider.System);
+
 var connectionString = builder.Configuration.GetConnectionString("AppointmentsDb")
     ?? throw new InvalidOperationException(
         "Connection string 'AppointmentsDb' not found. Set it via the ConnectionStrings__AppointmentsDb environment variable.");
