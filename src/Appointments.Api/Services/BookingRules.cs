@@ -65,6 +65,63 @@ public static class BookingRules
     }
 
     /// <summary>
+    /// Horas de inicio libres para una cita sin estilista de <paramref name="durationMinutes"/>
+    /// minutos el día <paramref name="date"/> (hora local del negocio). Usa el horario de
+    /// apertura, el intervalo de slots y la capacidad; excluye horas pasadas y slots
+    /// que no terminan antes del cierre. Día cerrado → lista vacía.
+    /// </summary>
+    /// <param name="options">Configuración del negocio.</param>
+    /// <param name="date">Día a consultar, en la zona horaria del negocio.</param>
+    /// <param name="durationMinutes">Duración de la cita en minutos.</param>
+    /// <param name="now">Hora actual (para excluir slots pasados).</param>
+    /// <param name="appointments">Citas de ese día (las canceladas se ignoran).</param>
+    public static IReadOnlyList<TimeOnly> GetAvailableSlots(BusinessOptions options, DateOnly date, int durationMinutes, DateTimeOffset now, IEnumerable<Appointment> appointments)
+    {
+        var schedule = options.GetScheduleFor(date.DayOfWeek);
+        if (schedule is null || durationMinutes <= 0)
+        {
+            return Array.Empty<TimeOnly>();
+        }
+
+        var timeZone = options.GetTimeZoneInfo();
+        var active = appointments.Where(a => a.Status != AppointmentStatus.Cancelled).ToList();
+        var openMinutes = (int)schedule.Open.ToTimeSpan().TotalMinutes;
+        var closeMinutes = (int)schedule.Close.ToTimeSpan().TotalMinutes;
+        var interval = Math.Max(1, options.SlotIntervalMinutes);
+
+        var slots = new List<TimeOnly>();
+        for (var minute = openMinutes; minute + durationMinutes <= closeMinutes; minute += interval)
+        {
+            var slot = TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(minute));
+            var start = ToBusinessTime(timeZone, date.ToDateTime(slot));
+            if (start < now)
+            {
+                continue;
+            }
+
+            if (!HasConflict(options, null, start, start.AddMinutes(durationMinutes), active))
+            {
+                slots.Add(slot);
+            }
+        }
+
+        return slots;
+    }
+
+    /// <summary>Inicio y fin (exclusivo) de un día en la zona horaria del negocio.</summary>
+    public static (DateTimeOffset Start, DateTimeOffset End) GetDayBounds(BusinessOptions options, DateOnly date)
+    {
+        var timeZone = options.GetTimeZoneInfo();
+        return (
+            ToBusinessTime(timeZone, date.ToDateTime(TimeOnly.MinValue)),
+            ToBusinessTime(timeZone, date.AddDays(1).ToDateTime(TimeOnly.MinValue)));
+    }
+
+    /// <summary>Convierte una fecha/hora local del negocio en un DateTimeOffset con su offset (EST/EDT).</summary>
+    private static DateTimeOffset ToBusinessTime(TimeZoneInfo timeZone, DateTime local) =>
+        new(local, timeZone.GetUtcOffset(local));
+
+    /// <summary>
     /// Máximo de citas simultáneas dentro de [start, end). No basta con contar
     /// las solapadas: dos citas seguidas (10:00-10:30 y 10:30-11:00) solapan con
     /// una de 10:00-11:00 pero nunca ocupan dos sillas a la vez.

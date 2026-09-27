@@ -67,6 +67,20 @@ Booking rules (see `Services/BookingRules.cs`):
 
 Run the unit tests with `dotnet test`.
 
+### Availability (public)
+
+`GET /api/availability?date=2026-10-03&durationMinutes=60` returns the free start
+times for an appointment **without a stylist**, in the business time zone:
+
+```json
+{ "date": "2026-10-03", "timeZone": "America/New_York", "slots": ["09:00", "09:15", "10:30"] }
+```
+
+- Uses `Business:OpeningHours`, `SlotIntervalMinutes` and `MaxConcurrentAppointments`.
+- Excludes past times (when `date` is today) and slots that would end after closing.
+- Closed day → `"slots": []`. Missing `date` or `durationMinutes` outside 5–480 → `400`.
+- `durationMinutes` is optional (default `30`). The endpoint needs no credentials.
+
 Swagger UI (interactive API docs) is at `/swagger` when running in
 Development — `dotnet run` opens it in your browser automatically.
 

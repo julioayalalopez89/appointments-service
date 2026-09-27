@@ -30,7 +30,15 @@ builder.Services.AddScoped<IAppointmentRepository, EfAppointmentRepository>();
 
 builder.Services.AddHealthChecks();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    // Incluye los comentarios /// de los controladores en la documentación de Swagger.
+    var xmlFile = Path.Combine(AppContext.BaseDirectory, $"{typeof(Program).Assembly.GetName().Name}.xml");
+    if (File.Exists(xmlFile))
+    {
+        options.IncludeXmlComments(xmlFile);
+    }
+});
 
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
     ?? new[] { "http://localhost:3000" };
