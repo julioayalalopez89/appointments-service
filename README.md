@@ -109,6 +109,43 @@ Business__OpeningHours__0__Open=09:00
 Business__OpeningHours__0__Close=19:00
 ```
 
+## CORS (dominios del frontend)
+
+Solo estos orígenes pueden llamar a la API desde el navegador:
+
+| Entorno | Orígenes permitidos |
+|---|---|
+| Producción | `https://305hairstyle.com`, `https://www.305hairstyle.com` (de `Cors:AllowedOrigins` en `appsettings.json`) |
+| Desarrollo (`ASPNETCORE_ENVIRONMENT=Development`) | Los anteriores + `http://localhost:5173` (Vite, `305hairstyle_web`) |
+
+Si `Cors:AllowedOrigins` está vacío se usan los dos dominios del salón. Las
+entradas se limpian al arrancar: espacios, entradas vacías, duplicados y la
+`/` final (`https://305hairstyle.com/` no coincidiría nunca con el `Origin`
+que manda el navegador).
+
+En Azure Container Apps se sobrescribe con variables de entorno (una por
+índice). Ojo: sobrescribir solo `__0` deja el `__1` de `appsettings.json`,
+así que define siempre la lista completa:
+
+```bash
+az containerapp update --name appointments-api --resource-group <rg> \
+  --set-env-vars \
+    Cors__AllowedOrigins__0=https://305hairstyle.com \
+    Cors__AllowedOrigins__1=https://www.305hairstyle.com
+```
+
+Con los valores por defecto no hace falta definir nada en Azure; solo si
+cambian los dominios (por ejemplo, un dominio de staging).
+
+Para probar en local, con la API en marcha en modo Development (`dotnet run`, perfil `http`):
+
+```bash
+curl -i -X OPTIONS http://localhost:5043/api/availability \
+  -H "Origin: http://localhost:5173" \
+  -H "Access-Control-Request-Method: GET"
+# → 204 con Access-Control-Allow-Origin: http://localhost:5173
+```
+
 ## Run it in Docker
 
 ```bash
@@ -152,12 +189,9 @@ you've done the Azure setup.
   is a one-file change, not a rewrite. `k8s/deployment.yaml` is pinned to
   `replicas: 1` with a comment explaining why — bump it only after the
   storage is real.
-- **CORS** is wired up (see `Program.cs`) so the 305 Hair Style Next.js site
-  (or any frontend) can call this API from the browser. Update
-  `Cors:AllowedOrigins` in `appsettings.json` (or the `k8s/deployment.yaml`
-  env var) to your real frontend domain(s) before going live — it currently
-  defaults to `http://localhost:3000` and the k8s manifest sets it to
-  `https://305hairstyle.com` as an example.
+- **CORS** is wired up (see `Program.cs` and `Configuration/CorsOrigins.cs`)
+  so the 305 Hair Style site can call this API from the browser. See
+  [CORS (dominios del frontend)](#cors-dominios-del-frontend) below.
 - **Soft-delete cancel vs. hard delete.** `POST /cancel` marks an appointment
   cancelled but keeps the record (useful for a future "appointment history"
   view); `DELETE` removes it outright. Point your UI at `/cancel` for normal
