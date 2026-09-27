@@ -58,8 +58,14 @@ curl -X POST http://localhost:5080/api/appointments \
       }'
 ```
 
-Booking a second appointment for the same `providerName` that overlaps in
-time returns `409 Conflict` — the double-booking check is already built in.
+Booking rules (see `Services/BookingRules.cs`):
+
+- **With `providerName`**: an overlapping appointment for the same stylist returns `409 Conflict`.
+- **Without `providerName`** (the website doesn't pick a stylist): `409 Conflict` only when the
+  salon already has `Business:MaxConcurrentAppointments` active appointments at the same time.
+- Appointments in the past, on a closed day or outside `Business:OpeningHours` return `400 Bad Request`.
+
+Run the unit tests with `dotnet test`.
 
 Swagger UI (interactive API docs) is at `/swagger` when running in
 Development — `dotnet run` opens it in your browser automatically.

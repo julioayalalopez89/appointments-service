@@ -47,13 +47,14 @@ public class InMemoryAppointmentRepository : IAppointmentRepository
 
     public bool Delete(Guid id) => _store.TryRemove(id, out _);
 
-    public bool HasConflict(string? providerName, DateTimeOffset start, DateTimeOffset end, Guid? excludingId = null)
+    public IReadOnlyList<Appointment> GetOverlapping(DateTimeOffset start, DateTimeOffset end, Guid? excludingId = null)
     {
-        return _store.Values.Any(a =>
-            a.Id != excludingId &&
-            a.Status != AppointmentStatus.Cancelled &&
-            string.Equals(a.ProviderName ?? string.Empty, providerName ?? string.Empty, StringComparison.OrdinalIgnoreCase) &&
-            a.StartTime < end &&
-            start < a.EndTime);
+        return _store.Values
+            .Where(a =>
+                a.Id != excludingId &&
+                a.Status != AppointmentStatus.Cancelled &&
+                a.StartTime < end &&
+                start < a.EndTime)
+            .ToList();
     }
 }

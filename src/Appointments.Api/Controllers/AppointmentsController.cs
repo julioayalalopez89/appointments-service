@@ -1,6 +1,9 @@
+using Appointments.Api.Configuration;
 using Appointments.Api.Models;
 using Appointments.Api.Repositories;
+using Appointments.Api.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace Appointments.Api.Controllers;
 
@@ -11,11 +14,19 @@ public class AppointmentsController : ControllerBase
 {
     private readonly IAppointmentRepository _repository;
     private readonly ILogger<AppointmentsController> _logger;
+    private readonly BusinessOptions _business;
+    private readonly TimeProvider _timeProvider;
 
-    public AppointmentsController(IAppointmentRepository repository, ILogger<AppointmentsController> logger)
+    public AppointmentsController(
+        IAppointmentRepository repository,
+        ILogger<AppointmentsController> logger,
+        IOptions<BusinessOptions> business,
+        TimeProvider timeProvider)
     {
         _repository = repository;
         _logger = logger;
+        _business = business.Value;
+        _timeProvider = timeProvider;
     }
 
     /// <summary>List appointments, optionally filtered by date and/or status.</summary>
@@ -42,10 +53,16 @@ public class AppointmentsController : ControllerBase
             return ValidationProblem("DurationMinutes must be positive.");
         }
 
-        var end = request.StartTime.AddMinutes(request.DurationMinutes);
-        if (_repository.HasConflict(request.ProviderName, request.StartTime, end))
+        var scheduleError = BookingRules.ValidateSchedule(_business, request.StartTime, request.DurationMinutes, _timeProvider.GetUtcNow());
+        if (scheduleError is not null)
         {
-            return Conflict(new { message = $"{request.ProviderName ?? "This provider"} already has an appointment that overlaps this time." });
+            return BadRequest(new { message = scheduleError });
+        }
+
+        var end = request.StartTime.AddMinutes(request.DurationMinutes);
+        if (HasConflict(request.ProviderName, request.StartTime, end))
+        {
+            return Conflict(new { message = ConflictMessage(request.ProviderName) });
         }
 
         var appointment = new Appointment
@@ -74,10 +91,22 @@ public class AppointmentsController : ControllerBase
         var existing = _repository.GetById(id);
         if (existing is null) return NotFound();
 
-        var end = request.StartTime.AddMinutes(request.DurationMinutes);
-        if (_repository.HasConflict(request.ProviderName, request.StartTime, end, excludingId: id))
+        // Solo se valida el horario si cambia la hora: así se pueden seguir
+        // editando notas o datos del cliente de una cita ya pasada.
+        var timeChanged = existing.StartTime != request.StartTime || existing.DurationMinutes != request.DurationMinutes;
+        if (timeChanged)
         {
-            return Conflict(new { message = $"{request.ProviderName ?? "This provider"} already has an appointment that overlaps this time." });
+            var scheduleError = BookingRules.ValidateSchedule(_business, request.StartTime, request.DurationMinutes, _timeProvider.GetUtcNow());
+            if (scheduleError is not null)
+            {
+                return BadRequest(new { message = scheduleError });
+            }
+        }
+
+        var end = request.StartTime.AddMinutes(request.DurationMinutes);
+        if (HasConflict(request.ProviderName, request.StartTime, end, excludingId: id))
+        {
+            return Conflict(new { message = ConflictMessage(request.ProviderName) });
         }
 
         existing.CustomerName = request.CustomerName;
@@ -117,4 +146,15 @@ public class AppointmentsController : ControllerBase
     {
         return _repository.Delete(id) ? NoContent() : NotFound();
     }
+
+    private bool HasConflict(string? providerName, DateTimeOffset start, DateTimeOffset end, Guid? excludingId = null)
+    {
+        var overlapping = _repository.GetOverlapping(start, end, excludingId);
+        return BookingRules.HasConflict(_business, providerName, start, end, overlapping);
+    }
+
+    private static string ConflictMessage(string? providerName) =>
+        string.IsNullOrWhiteSpace(providerName)
+            ? "No availability at this time: the salon is fully booked for that slot."
+            : $"{providerName} already has an appointment that overlaps this time.";
 }
