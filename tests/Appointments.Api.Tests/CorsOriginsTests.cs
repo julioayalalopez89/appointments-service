@@ -23,7 +23,9 @@ public class CorsOriginsTests
         context.Request.Method = "GET";
         context.Request.Headers.Origin = requestOrigin;
         var service = new CorsService(Options.Create(new CorsOptions()), NullLoggerFactory.Instance);
-        return service.EvaluatePolicy(context, policy).AllowedOrigin;
+        var result = service.EvaluatePolicy(context, policy);
+        // AllowedOrigin puede venir relleno aunque el origen no esté permitido; lo que manda es IsOriginAllowed.
+        return result.IsOriginAllowed ? result.AllowedOrigin : null;
     }
 
     [Fact]
