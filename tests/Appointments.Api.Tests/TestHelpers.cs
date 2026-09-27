@@ -42,6 +42,11 @@ internal static class TestData
             Options.Create(Business(maxConcurrent)),
             new FixedTimeProvider(Now));
 
+    public static AvailabilityController Availability(IAppointmentRepository repository, int maxConcurrent = 1, DateTimeOffset? now = null) =>
+        new(repository,
+            Options.Create(Business(maxConcurrent)),
+            new FixedTimeProvider(now ?? Now));
+
     public static CreateAppointmentRequest Request(DateTimeOffset start, int durationMinutes = 30, string? provider = null) => new()
     {
         CustomerName = "Test Customer",
