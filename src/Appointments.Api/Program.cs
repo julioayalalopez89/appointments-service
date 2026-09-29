@@ -44,8 +44,9 @@ builder.Services.AddSwaggerGen(options =>
     }
 });
 
-var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-    ?? new[] { "http://localhost:3000" };
+// Dominios del frontend que pueden llamar a la API desde el navegador.
+// Producción: 305hairstyle.com (con y sin www). Desarrollo: también Vite (localhost:5173).
+var allowedOrigins = CorsOrigins.Resolve(builder.Configuration, builder.Environment.IsDevelopment());
 
 builder.Services.AddCors(options =>
 {
