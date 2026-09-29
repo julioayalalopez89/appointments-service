@@ -127,16 +127,17 @@ el log dice qué corregir.
 | `TimeZone` | `America/New_York` | Zona horaria IANA del negocio |
 | `SlotIntervalMinutes` | `15` | Cada cuántos minutos empieza un hueco reservable |
 | `MaxConcurrentAppointments` | `1` | Citas simultáneas sin estilista asignado (sillas/estilistas) |
-| `OpeningHours` | Mar–Vie 9:00–19:00, Sáb 9:00–17:00 | Horario por día; un día que no aparece está cerrado |
+| `OpeningHours` | Sáb, Dom y Lun 9:00–19:00 | Horario por día; un día que no aparece está cerrado |
 
-> ⚠️ El horario incluido es **de ejemplo** hasta confirmar el horario real del salón.
+> Horario real del salón confirmado por Julio (el mismo que muestra 305hairstyle.com).
+> Si en Azure hay variables `Business__OpeningHours__*`, **mandan sobre `appsettings.json`**: bórralas o cámbialas para que coincidan.
 
 En Azure Container Apps se sobrescribe con variables de entorno, por ejemplo:
 
 ```
 Business__TimeZone=America/New_York
 Business__MaxConcurrentAppointments=2
-Business__OpeningHours__0__Day=Tuesday
+Business__OpeningHours__0__Day=Saturday
 Business__OpeningHours__0__Open=09:00
 Business__OpeningHours__0__Close=19:00
 ```
