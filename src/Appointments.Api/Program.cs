@@ -1,6 +1,7 @@
 using Appointments.Api.Data;
 using Appointments.Api.Configuration;
 using Appointments.Api.Repositories;
+using Appointments.Api.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -14,6 +15,9 @@ builder.Services.AddSingleton<IValidateOptions<BusinessOptions>, BusinessOptions
 builder.Services.AddOptions<BusinessOptions>()
     .Bind(builder.Configuration.GetSection(BusinessOptions.SectionName))
     .ValidateOnStart();
+
+// Clave de los endpoints de gestión (cabecera X-Api-Key). Ver Security/RequireApiKeyAttribute.cs.
+builder.Services.Configure<SecurityOptions>(builder.Configuration.GetSection(SecurityOptions.SectionName));
 
 // Reloj inyectable: en los tests se sustituye por una hora fija.
 builder.Services.AddSingleton(TimeProvider.System);

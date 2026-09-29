@@ -84,6 +84,38 @@ times for an appointment **without a stylist**, in the business time zone:
 Swagger UI (interactive API docs) is at `/swagger` when running in
 Development — `dotnet run` opens it in your browser automatically.
 
+## Seguridad: endpoints de gestión (API key)
+
+Públicos (sin credenciales): `POST /api/appointments`, `GET /api/availability`, `/healthz` y `/`.
+
+Protegidos con la cabecera `X-Api-Key`: `GET /api/appointments`, `GET /api/appointments/{id}`,
+`PUT /api/appointments/{id}`, `POST /api/appointments/{id}/cancel` y `DELETE /api/appointments/{id}`.
+
+- Sin cabecera o con una clave incorrecta → `401`.
+- Si el servidor **no tiene clave configurada** → `503` (los endpoints de gestión quedan cerrados, nunca abiertos).
+
+La clave se lee de `Security:AdminApiKey` y **nunca se guarda en el repo**.
+
+En local (user-secrets):
+
+```bash
+cd src/Appointments.Api
+dotnet user-secrets init
+dotnet user-secrets set "Security:AdminApiKey" "$(openssl rand -hex 32)"
+curl -H "X-Api-Key: <tu-clave>" http://localhost:<puerto>/api/appointments
+```
+
+En Azure Container Apps (se guarda como secret y se expone como variable de entorno):
+
+```bash
+az containerapp secret set --name appointments-api --resource-group <tu-resource-group> \
+  --secrets admin-api-key=<tu-clave>
+az containerapp update --name appointments-api --resource-group <tu-resource-group> \
+  --set-env-vars Security__AdminApiKey=secretref:admin-api-key
+```
+
+El workflow de deploy solo cambia la imagen, así que la variable se mantiene entre despliegues.
+
 ## Configuración del negocio (horario y capacidad)
 
 La sección `Business` de `appsettings.json` define las reglas para calcular

@@ -1,6 +1,7 @@
 using Appointments.Api.Configuration;
 using Appointments.Api.Models;
 using Appointments.Api.Repositories;
+using Appointments.Api.Security;
 using Appointments.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -29,14 +30,16 @@ public class AppointmentsController : ControllerBase
         _timeProvider = timeProvider;
     }
 
-    /// <summary>List appointments, optionally filtered by date and/or status.</summary>
+    /// <summary>List appointments, optionally filtered by date and/or status. Requires <c>X-Api-Key</c>.</summary>
+    [RequireApiKey]
     [HttpGet]
     public ActionResult<IReadOnlyList<Appointment>> GetAll([FromQuery] DateOnly? date, [FromQuery] AppointmentStatus? status)
     {
         return Ok(_repository.GetAll(date, status));
     }
 
-    /// <summary>Get a single appointment by id.</summary>
+    /// <summary>Get a single appointment by id. Requires <c>X-Api-Key</c>.</summary>
+    [RequireApiKey]
     [HttpGet("{id:guid}")]
     public ActionResult<Appointment> GetById(Guid id)
     {
@@ -44,7 +47,7 @@ public class AppointmentsController : ControllerBase
         return appointment is null ? NotFound() : Ok(appointment);
     }
 
-    /// <summary>Book a new appointment.</summary>
+    /// <summary>Book a new appointment. Public: the website calls it without credentials.</summary>
     [HttpPost]
     public ActionResult<Appointment> Create([FromBody] CreateAppointmentRequest request)
     {
@@ -84,7 +87,8 @@ public class AppointmentsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = appointment.Id }, appointment);
     }
 
-    /// <summary>Reschedule or edit an existing appointment.</summary>
+    /// <summary>Reschedule or edit an existing appointment. Requires <c>X-Api-Key</c>.</summary>
+    [RequireApiKey]
     [HttpPut("{id:guid}")]
     public ActionResult<Appointment> Update(Guid id, [FromBody] UpdateAppointmentRequest request)
     {
@@ -123,7 +127,8 @@ public class AppointmentsController : ControllerBase
         return Ok(existing);
     }
 
-    /// <summary>Cancel an appointment (soft delete — keeps history instead of removing the record).</summary>
+    /// <summary>Cancel an appointment (soft delete — keeps history instead of removing the record). Requires <c>X-Api-Key</c>.</summary>
+    [RequireApiKey]
     [HttpPost("{id:guid}/cancel")]
     public ActionResult<Appointment> Cancel(Guid id, [FromBody] CancelAppointmentRequest? request)
     {
@@ -140,7 +145,8 @@ public class AppointmentsController : ControllerBase
         return Ok(existing);
     }
 
-    /// <summary>Permanently delete an appointment record. Prefer /cancel for normal use.</summary>
+    /// <summary>Permanently delete an appointment record. Prefer /cancel for normal use. Requires <c>X-Api-Key</c>.</summary>
+    [RequireApiKey]
     [HttpDelete("{id:guid}")]
     public IActionResult Delete(Guid id)
     {
