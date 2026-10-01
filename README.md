@@ -116,6 +116,55 @@ az containerapp update --name appointments-api --resource-group <tu-resource-gro
 
 El workflow de deploy solo cambia la imagen, así que la variable se mantiene entre despliegues.
 
+## Avisos por email al salón (Resend)
+
+Cada vez que se **reserva** o se **cancela** una cita, la API envía un email al salón con la fecha y la
+hora local del salón, el servicio, la duración, el estilista (si lo hay), el nombre, el teléfono (enlace
+`tel:` y de WhatsApp), el email, las notas y un enlace a la agenda (`https://305hairstyle.com/admin/`).
+
+- El envío ocurre **en segundo plano**: no retrasa la respuesta de la API.
+- Si falta la API key, el email del salón o el remitente → no se envía nada y queda un aviso en el log.
+- Si Resend falla → la cita se guarda igual y el error queda en el log.
+- Se usa la API HTTP de Resend directamente (`POST https://api.resend.com/emails`), sin SDK.
+
+Configuración (sección `Notifications`; nada de esto va en el repo salvo el remitente por defecto):
+
+| Variable de entorno | Qué es |
+|---|---|
+| `Notifications__ResendApiKey` | API key de Resend (`re_...`). **Secret.** |
+| `Notifications__SalonEmail` | Email que recibe los avisos. |
+| `Notifications__FromEmail` | Remitente. Por defecto `305 Hair Style <reservas@305hairstyle.com>`. |
+| `Notifications__AdminUrl` | Enlace a la agenda. Por defecto `https://305hairstyle.com/admin/`. |
+
+### Pasos para Julio (una sola vez)
+
+1. Crear una cuenta en [resend.com](https://resend.com) y una API key con permiso de envío (*Sending access*).
+2. En Resend → **Domains** → *Add domain* → `305hairstyle.com`. Copiar los registros DNS que muestra
+   (TXT/MX de SPF y el TXT de DKIM) en el DNS de **Hostinger** y pulsar *Verify* en Resend.
+   Mientras el dominio no esté verificado se puede probar con `Notifications__FromEmail=onboarding@resend.dev`,
+   pero Resend solo deja enviar así al email de la propia cuenta.
+3. Guardar la key como secret del Container App y exponer la configuración:
+
+```bash
+az containerapp secret set --name appointments-api --resource-group <tu-resource-group> \
+  --secrets resend-api-key=<re_tu_api_key>
+az containerapp update --name appointments-api --resource-group <tu-resource-group> \
+  --set-env-vars Notifications__ResendApiKey=secretref:resend-api-key \
+                 Notifications__SalonEmail=<email-del-salon>
+```
+
+4. Hacer una reserva de prueba en la web y comprobar que llega el email (y, si no, revisar los logs
+   del Container App: `az containerapp logs show --name appointments-api --resource-group <tu-resource-group>`).
+
+En local se puede probar con user-secrets:
+
+```bash
+cd src/Appointments.Api
+dotnet user-secrets set "Notifications:ResendApiKey" "<re_tu_api_key>"
+dotnet user-secrets set "Notifications:SalonEmail" "<tu-email>"
+dotnet user-secrets set "Notifications:FromEmail" "onboarding@resend.dev"
+```
+
 ## Configuración del negocio (horario y capacidad)
 
 La sección `Business` de `appsettings.json` define las reglas para calcular

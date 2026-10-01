@@ -3,6 +3,7 @@ using Appointments.Api.Models;
 using Appointments.Api.Repositories;
 using Appointments.Api.Security;
 using Appointments.Api.Services;
+using Appointments.Api.Services.Notifications;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
@@ -17,17 +18,20 @@ public class AppointmentsController : ControllerBase
     private readonly ILogger<AppointmentsController> _logger;
     private readonly BusinessOptions _business;
     private readonly TimeProvider _timeProvider;
+    private readonly INotificationService _notifications;
 
     public AppointmentsController(
         IAppointmentRepository repository,
         ILogger<AppointmentsController> logger,
         IOptions<BusinessOptions> business,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        INotificationService notifications)
     {
         _repository = repository;
         _logger = logger;
         _business = business.Value;
         _timeProvider = timeProvider;
+        _notifications = notifications;
     }
 
     /// <summary>List appointments, optionally filtered by date and/or status. Requires <c>X-Api-Key</c>.</summary>
@@ -83,6 +87,7 @@ public class AppointmentsController : ControllerBase
         _repository.Add(appointment);
         _logger.LogInformation("Booked appointment {AppointmentId} for {CustomerName} at {StartTime}",
             appointment.Id, appointment.CustomerName, appointment.StartTime);
+        NotifySalon(n => n.AppointmentBooked(appointment), appointment.Id);
 
         return CreatedAtAction(nameof(GetById), new { id = appointment.Id }, appointment);
     }
@@ -135,6 +140,7 @@ public class AppointmentsController : ControllerBase
         var existing = _repository.GetById(id);
         if (existing is null) return NotFound();
 
+        var wasAlreadyCancelled = existing.Status == AppointmentStatus.Cancelled;
         existing.Status = AppointmentStatus.Cancelled;
         existing.Notes = string.IsNullOrWhiteSpace(request?.Reason)
             ? existing.Notes
@@ -142,6 +148,10 @@ public class AppointmentsController : ControllerBase
         existing.UpdatedAt = DateTimeOffset.UtcNow;
 
         _repository.Update(existing);
+        if (!wasAlreadyCancelled)
+        {
+            NotifySalon(n => n.AppointmentCancelled(existing, request?.Reason), existing.Id);
+        }
         return Ok(existing);
     }
 
@@ -151,6 +161,22 @@ public class AppointmentsController : ControllerBase
     public IActionResult Delete(Guid id)
     {
         return _repository.Delete(id) ? NoContent() : NotFound();
+    }
+
+    /// <summary>
+    /// Avisa al salón sin arriesgar la operación: la cita ya está guardada, así que
+    /// cualquier fallo del aviso solo se registra en el log.
+    /// </summary>
+    private void NotifySalon(Action<INotificationService> notify, Guid appointmentId)
+    {
+        try
+        {
+            notify(_notifications);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Could not notify the salon about appointment {AppointmentId}", appointmentId);
+        }
     }
 
     private bool HasConflict(string? providerName, DateTimeOffset start, DateTimeOffset end, Guid? excludingId = null)

@@ -2,6 +2,7 @@ using Appointments.Api.Data;
 using Appointments.Api.Configuration;
 using Appointments.Api.Repositories;
 using Appointments.Api.Security;
+using Appointments.Api.Services.Notifications;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -18,6 +19,14 @@ builder.Services.AddOptions<BusinessOptions>()
 
 // Clave de los endpoints de gestión (cabecera X-Api-Key). Ver Security/RequireApiKeyAttribute.cs.
 builder.Services.Configure<SecurityOptions>(builder.Configuration.GetSection(SecurityOptions.SectionName));
+
+// Avisos por email al salón (Resend) al crear o cancelar una cita. Se envían en segundo
+// plano; sin API key o sin email del salón no se envía nada (solo un aviso en el log).
+builder.Services.Configure<NotificationOptions>(builder.Configuration.GetSection(NotificationOptions.SectionName));
+builder.Services.AddSingleton<EmailQueue>();
+builder.Services.AddSingleton<INotificationService, EmailNotificationService>();
+builder.Services.AddHttpClient<IEmailSender, ResendEmailSender>(client => client.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddHostedService<EmailNotificationWorker>();
 
 // Reloj inyectable: en los tests se sustituye por una hora fija.
 builder.Services.AddSingleton(TimeProvider.System);
