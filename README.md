@@ -65,7 +65,7 @@ Booking rules (see `Services/BookingRules.cs`):
   salon already has `Business:MaxConcurrentAppointments` active appointments at the same time.
 - Appointments in the past, on a closed day or outside `Business:OpeningHours` return `400 Bad Request`.
 
-Run the unit tests with `dotnet test`.
+Run the tests with `dotnet test` (no database needed). Besides the unit tests, `tests/Appointments.Api.Tests/ApiIntegrationTests.cs` starts the whole API in memory with `WebApplicationFactory` and the EF Core in-memory provider, and calls every endpoint over HTTP. CI runs them on every pull request.
 
 ### Availability (public)
 

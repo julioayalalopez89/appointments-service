@@ -60,10 +60,15 @@ var app = builder.Build();
 
 // Aplica las migraciones automáticamente al arrancar — crea las tablas la
 // primera vez, sin que tengas que correr un comando aparte en producción.
+// Solo con una base de datos relacional: los tests de integración usan el
+// proveedor en memoria de EF, que no tiene migraciones.
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppointmentsDbContext>();
-    db.Database.Migrate();
+    if (db.Database.IsRelational())
+    {
+        db.Database.Migrate();
+    }
 }
 
 if (app.Environment.IsDevelopment())
