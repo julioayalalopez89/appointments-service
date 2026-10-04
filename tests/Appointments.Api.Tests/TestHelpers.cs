@@ -2,6 +2,7 @@ using Appointments.Api.Configuration;
 using Appointments.Api.Controllers;
 using Appointments.Api.Models;
 using Appointments.Api.Repositories;
+using Appointments.Api.Services.Notifications;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -13,6 +14,26 @@ internal sealed class FixedTimeProvider : TimeProvider
     private readonly DateTimeOffset _now;
     public FixedTimeProvider(DateTimeOffset now) => _now = now;
     public override DateTimeOffset GetUtcNow() => _now.ToUniversalTime();
+}
+
+/// <summary>Servicio de avisos falso: guarda las llamadas y, si se pide, falla.</summary>
+internal sealed class FakeNotificationService : INotificationService
+{
+    public bool Throw { get; init; }
+    public List<Appointment> Booked { get; } = new();
+    public List<(Appointment Appointment, string? Reason)> Cancelled { get; } = new();
+
+    public void AppointmentBooked(Appointment appointment)
+    {
+        if (Throw) throw new InvalidOperationException("Email provider is down");
+        Booked.Add(appointment);
+    }
+
+    public void AppointmentCancelled(Appointment appointment, string? reason)
+    {
+        if (Throw) throw new InvalidOperationException("Email provider is down");
+        Cancelled.Add((appointment, reason));
+    }
 }
 
 internal static class TestData
@@ -36,11 +57,13 @@ internal static class TestData
         },
     };
 
-    public static AppointmentsController Controller(IAppointmentRepository repository, int maxConcurrent = 1) =>
+    public static AppointmentsController Controller(
+        IAppointmentRepository repository, int maxConcurrent = 1, INotificationService? notifications = null) =>
         new(repository,
             NullLogger<AppointmentsController>.Instance,
             Options.Create(Business(maxConcurrent)),
-            new FixedTimeProvider(Now));
+            new FixedTimeProvider(Now),
+            notifications ?? new FakeNotificationService());
 
     public static AvailabilityController Availability(IAppointmentRepository repository, int maxConcurrent = 1, DateTimeOffset? now = null) =>
         new(repository,
