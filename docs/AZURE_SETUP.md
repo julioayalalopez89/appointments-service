@@ -1,5 +1,10 @@
 # One-time Azure & GitHub setup
 
+> **Legacy:** this checklist was written for the original AKS deployment. The service
+> now runs on **Azure Container Apps** (see the README). The resource group, ACR,
+> OIDC federated credential and GitHub secrets/variables parts still apply; the AKS
+> cluster and `kubectl` steps do not. The old manifests are in `docs/legacy-aks/`.
+
 This is the checklist to run **once**, before the `build-and-deploy.yml` workflow
 will succeed. It provisions the Azure resources and wires up GitHub Actions to
 deploy to them without ever storing a secret.

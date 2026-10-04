@@ -5,21 +5,44 @@ built with a hair salon in mind, but generic enough (free-text service/
 provider names, no salon-specific fields) to work for any appointment-based
 business: barbershop, spa, tutoring, repair shop, etc.
 
-This project follows the pattern from the Microsoft Learn module
-[Deploy a cloud-native .NET microservice automatically with GitHub Actions and Azure Pipelines](https://learn.microsoft.com/en-us/training/modules/microservices-devops-aspnet-core/):
-containerize the service, then use GitHub Actions to build the image, push it
-to Azure Container Registry, and deploy it to Azure Kubernetes Service.
+It is the booking backend of [305hairstyle.com](https://305hairstyle.com)
+(`305hairstyle_web`).
+
+## Architecture (current)
+
+```
+305hairstyle.com (React)  ──HTTPS + CORS──▶  Azure Container Apps: appointments-api
+                                               │  ASP.NET Core 8 Web API (this repo)
+                                               ▼
+                                             Azure SQL (EF Core, migrations applied on startup)
+
+GitHub Actions: PR → ci.yml (build + tests)
+                push to main → build-and-deploy.yml (az acr build → ACR → az containerapp update → /healthz smoke test)
+```
+
+- **Hosting:** Azure Container Apps (app `appointments-api`, environment `cae-appointments`).
+  The image is built with ACR Tasks and pushed to Azure Container Registry.
+- **Storage:** Azure SQL through EF Core (`EfAppointmentRepository`). The connection string comes
+  from `ConnectionStrings__AppointmentsDb`; migrations run automatically at startup.
+- **Security:** public booking and availability endpoints; management endpoints need `X-Api-Key`
+  (see below). Secrets live in Container Apps, never in the repo.
+- The project started from the Microsoft Learn module
+  [Deploy a cloud-native .NET microservice automatically with GitHub Actions and Azure Pipelines](https://learn.microsoft.com/en-us/training/modules/microservices-devops-aspnet-core/),
+  which deploys to AKS. It moved to Container Apps; the old Kubernetes manifests are kept in
+  `docs/legacy-aks/` for reference only.
 
 ## What's here
 
 ```
-src/Appointments.Api/         The Web API (controllers, models, in-memory repository)
+src/Appointments.Api/         The Web API (controllers, models, EF Core data access, booking rules)
   Dockerfile                  Multi-stage build → small runtime image
-k8s/                          Kubernetes manifests (namespace, deployment, service)
+  Migrations/                 EF Core migrations (applied on startup)
+tests/Appointments.Api.Tests/ xUnit tests (no database needed)
 .github/workflows/
-  ci.yml                      Builds the project on every pull request (no Azure needed)
-  build-and-deploy.yml        Builds & pushes the image to ACR, then deploys to AKS on push to main
-docs/AZURE_SETUP.md           One-time checklist: Azure resources + GitHub secrets
+  ci.yml                      Builds and runs the tests on every pull request (no Azure needed)
+  build-and-deploy.yml        Builds & pushes the image to ACR, then updates the Container App on push to main
+docs/AZURE_SETUP.md           One-time Azure + GitHub OIDC setup (written for the original AKS setup)
+docs/legacy-aks/              Old Kubernetes manifests (not used since the move to Container Apps)
 ```
 
 ## Run it locally
@@ -41,7 +64,7 @@ The API listens on the port printed in the console (e.g. `http://localhost:5080`
 | PUT | `/api/appointments/{id}` | Reschedule / edit an appointment |
 | POST | `/api/appointments/{id}/cancel` | Cancel (soft delete, keeps history) |
 | DELETE | `/api/appointments/{id}` | Permanently delete |
-| GET | `/healthz` | Health check (used by Kubernetes probes) |
+| GET | `/healthz` | Health check (used by the post-deploy smoke test) |
 
 Example booking request:
 
@@ -246,31 +269,34 @@ two commands above once locally just to confirm before your first push.)
 
 ## Ship it to Azure
 
-1. Follow **[docs/AZURE_SETUP.md](docs/AZURE_SETUP.md)** once — creates the
-   resource group, Container Registry, AKS cluster, and a passwordless
-   (OIDC) connection from GitHub Actions to your Azure subscription.
-2. Push to `main`. The **Build and deploy Appointments API** workflow builds
-   the container image with `az acr build`, pushes it to your registry, then
-   applies the Kubernetes manifests in `k8s/` to your AKS cluster.
+The Azure resources already exist (resource group, ACR, Container Apps
+environment `cae-appointments`, app `appointments-api`, Azure SQL) and GitHub
+Actions logs in with OIDC (no stored passwords).
+
+1. Merge a pull request into `main`.
+2. The **Build and deploy Appointments API** workflow builds the image with
+   `az acr build`, pushes it to the registry, runs `az containerapp update`
+   with the new image and then smoke-tests `/healthz`.
 3. Watch it run under the repo's **Actions** tab on GitHub.
 
-Every pull request also runs `ci.yml`, a plain `dotnet build` — that one
-needs no Azure access, so it's safe to have running from day one even before
-you've done the Azure setup.
+The deploy only changes the image: environment variables and secrets set on
+the Container App (`ConnectionStrings__AppointmentsDb`, `Security__AdminApiKey`,
+`Business__*`, `Cors__*`) are kept between deploys.
+
+Every pull request also runs `ci.yml` (build + tests). It needs no Azure
+access.
+
+> `docs/AZURE_SETUP.md` still describes the original AKS provisioning. The OIDC
+> and GitHub secrets/variables parts still apply; the AKS cluster steps do not.
 
 ## Design notes / why it's built this way
 
-- **Only one NuGet package** (`Swashbuckle.AspNetCore`, for the Swagger UI).
-  Everything else (controllers, DI, health checks, CORS) ships in the
-  ASP.NET Core shared framework. `dotnet restore`/`run` need internet access
-  the first time to pull that one package — after that it's cached locally.
-- **In-memory storage.** `InMemoryAppointmentRepository` is a placeholder —
-  data resets on every restart, and doesn't work correctly if you scale past
-  1 replica (each pod gets its own copy). The whole point of hiding storage
-  behind `IAppointmentRepository` is that swapping in a real database later
-  is a one-file change, not a rewrite. `k8s/deployment.yaml` is pinned to
-  `replicas: 1` with a comment explaining why — bump it only after the
-  storage is real.
+- **Few NuGet packages**: `Swashbuckle.AspNetCore` (Swagger UI) and EF Core
+  for SQL Server. Everything else (controllers, DI, health checks, CORS) ships
+  in the ASP.NET Core shared framework.
+- **Storage behind an interface.** `IAppointmentRepository` has the real
+  `EfAppointmentRepository` (Azure SQL) and an `InMemoryAppointmentRepository`
+  that the unit tests use.
 - **CORS** is wired up (see `Program.cs` and `Configuration/CorsOrigins.cs`)
   so the 305 Hair Style site can call this API from the browser. See
   [CORS (dominios del frontend)](#cors-dominios-del-frontend) below.
@@ -281,10 +307,6 @@ you've done the Azure setup.
 
 ## Next steps worth considering
 
-- Swap `InMemoryAppointmentRepository` for a real database (Azure SQL,
-  Postgres, or even SQLite to start).
-- Add authentication (an API key header is the simplest starting point) —
-  right now every endpoint is open to anyone who can reach the URL.
 - If this needs to serve more than one business/tenant later, that's the
   point to promote `ServiceName`/`ProviderName` from free text into real
   `Service` and `Provider` entities, and add a `BusinessId` — but there's no
