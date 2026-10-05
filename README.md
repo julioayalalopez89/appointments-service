@@ -139,14 +139,20 @@ az containerapp update --name appointments-api --resource-group <tu-resource-gro
 
 El workflow de deploy solo cambia la imagen, así que la variable se mantiene entre despliegues.
 
-## Avisos por email al salón (Resend)
+## Emails: avisos al salón y confirmación a la clienta (Resend)
 
 Cada vez que se **reserva** o se **cancela** una cita, la API envía un email al salón con la fecha y la
 hora local del salón, el servicio, la duración, el estilista (si lo hay), el nombre, el teléfono (enlace
 `tel:` y de WhatsApp), el email, las notas y un enlace a la agenda (`https://305hairstyle.com/admin/`).
 
+Además, al **reservar**, si la clienta dejó email, recibe una **confirmación** con la fecha y la hora
+(hora del salón), el servicio, el estilista (si lo hay), la dirección del salón (con enlace a Maps) y un
+enlace de WhatsApp con un mensaje ya escrito para cambiar o cancelar. Si responde al email, la respuesta
+llega al email del salón (`reply_to`). No incluye las notas ni el enlace a la agenda.
+
 - El envío ocurre **en segundo plano**: no retrasa la respuesta de la API.
-- Si falta la API key, el email del salón o el remitente → no se envía nada y queda un aviso en el log.
+- Si falta la API key o el remitente → no se envía nada y queda un aviso en el log.
+  Si solo falta el email del salón → no hay avisos al salón, pero sí confirmaciones a las clientas.
 - Si Resend falla → la cita se guarda igual y el error queda en el log.
 - Se usa la API HTTP de Resend directamente (`POST https://api.resend.com/emails`), sin SDK.
 
@@ -158,6 +164,10 @@ Configuración (sección `Notifications`; nada de esto va en el repo salvo el re
 | `Notifications__SalonEmail` | Email que recibe los avisos. |
 | `Notifications__FromEmail` | Remitente. Por defecto `305 Hair Style <reservas@305hairstyle.com>`. |
 | `Notifications__AdminUrl` | Enlace a la agenda. Por defecto `https://305hairstyle.com/admin/`. |
+| `Notifications__SalonName` | Nombre en el asunto y la firma de la confirmación. Por defecto `305 Hair Style`. |
+| `Notifications__SalonAddress` | Dirección en la confirmación. Por defecto `8631 Coral Wy, Miami, FL 33155`. |
+| `Notifications__SalonMapsUrl` | Enlace a Google Maps de la dirección (opcional). |
+| `Notifications__SalonWhatsApp` | WhatsApp del salón para cambios o cancelaciones. Por defecto `+1 786 566 9938`. Sin número, la confirmación dice "responde a este email". |
 
 ### Pasos para Julio (una sola vez)
 

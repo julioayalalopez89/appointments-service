@@ -121,6 +121,135 @@ public class NotificationTests
         Assert.Contains("No puede venir", message.Text);
     }
 
+    // --- Confirmación a la clienta ---
+
+    private static List<EmailMessage> Drain(EmailQueue queue)
+    {
+        var messages = new List<EmailMessage>();
+        while (queue.Reader.TryRead(out var message)) messages.Add(message);
+        return messages;
+    }
+
+    private static EmailNotificationService Service(EmailQueue queue, NotificationOptions options) =>
+        new(Options.Create(options), Options.Create(TestData.Business()), queue, NullLogger<EmailNotificationService>.Instance);
+
+    [Fact]
+    public void Booked_WithCustomerEmail_QueuesSalonNoticeAndCustomerConfirmation()
+    {
+        var queue = new EmailQueue();
+        var appointment = Booked(TestData.Tuesday(10, 0));
+        appointment.CustomerEmail = " ana@example.com ";
+
+        Service(queue, Configured()).AppointmentBooked(appointment);
+
+        var messages = Drain(queue);
+        Assert.Equal(2, messages.Count);
+        Assert.Equal("salon@example.com", messages[0].To);
+        Assert.Null(messages[0].ReplyTo);
+        Assert.Equal("ana@example.com", messages[1].To);
+        Assert.Equal("305 Hair Style <reservas@example.com>", messages[1].From);
+        Assert.Equal("salon@example.com", messages[1].ReplyTo);
+        Assert.StartsWith("Tu cita en 305 Hair Style está confirmada", messages[1].Subject);
+    }
+
+    [Fact]
+    public void Booked_WithoutCustomerEmail_OnlyNotifiesSalon()
+    {
+        var queue = new EmailQueue();
+
+        Service(queue, Configured()).AppointmentBooked(Booked(TestData.Tuesday(10, 0)));
+
+        Assert.Equal("salon@example.com", Assert.Single(Drain(queue)).To);
+    }
+
+    [Fact]
+    public void Booked_WithoutSalonEmail_StillConfirmsToCustomer()
+    {
+        var queue = new EmailQueue();
+        var options = Configured();
+        options.SalonEmail = "";
+        var appointment = Booked(TestData.Tuesday(10, 0));
+        appointment.CustomerEmail = "ana@example.com";
+
+        Service(queue, options).AppointmentBooked(appointment);
+
+        var message = Assert.Single(Drain(queue));
+        Assert.Equal("ana@example.com", message.To);
+        Assert.Null(message.ReplyTo);
+    }
+
+    [Fact]
+    public void Booked_WithoutApiKey_DoesNotConfirmToCustomer()
+    {
+        var queue = new EmailQueue();
+        var options = Configured();
+        options.ResendApiKey = "";
+        var appointment = Booked(TestData.Tuesday(10, 0));
+        appointment.CustomerEmail = "ana@example.com";
+
+        Service(queue, options).AppointmentBooked(appointment);
+
+        Assert.Empty(Drain(queue));
+    }
+
+    [Fact]
+    public void Cancelled_DoesNotEmailCustomer()
+    {
+        var queue = new EmailQueue();
+        var appointment = Booked(TestData.Tuesday(10, 0));
+        appointment.CustomerEmail = "ana@example.com";
+
+        Service(queue, Configured()).AppointmentCancelled(appointment, null);
+
+        Assert.Equal("salon@example.com", Assert.Single(Drain(queue)).To);
+    }
+
+    [Fact]
+    public void CustomerComposer_IncludesDateTimeServiceAddressAndWhatsApp()
+    {
+        var appointment = Booked(TestData.Tuesday(10, 0));
+        appointment.StartTime = appointment.StartTime.ToUniversalTime(); // 14:00 UTC → 10:00 AM en Nueva York
+        appointment.CustomerName = "Ana López";
+        appointment.ProviderName = "Yuli";
+        appointment.Notes = "Nota interna";
+        var options = Configured();
+        options.SalonAddress = "8631 Coral Wy, Miami, FL 33155";
+        options.SalonMapsUrl = "https://maps.example.com/salon";
+        options.SalonWhatsApp = "(786) 566-9938";
+
+        var content = CustomerEmailComposer.Confirmation(appointment, TestData.Business(), options);
+
+        Assert.Equal("Tu cita en 305 Hair Style está confirmada — martes 29 de septiembre de 2026, 10:00 AM", content.Subject);
+        Assert.Contains("¡Hola, Ana!", content.Text);
+        Assert.Contains("Fecha: martes 29 de septiembre de 2026", content.Text);
+        Assert.Contains("Hora: 10:00 AM – 10:30 AM", content.Text);
+        Assert.Contains("Servicio: Haircut", content.Text);
+        Assert.Contains("Estilista: Yuli", content.Text);
+        Assert.Contains("Dirección: 8631 Coral Wy, Miami, FL 33155", content.Text);
+        Assert.Contains("href=\"https://maps.example.com/salon\"", content.Html);
+        Assert.Contains("https://wa.me/17865669938?text=", content.Text);
+        Assert.Contains("https://wa.me/17865669938?text=", content.Html);
+        // Nada interno del salón en el email de la clienta.
+        Assert.DoesNotContain("Nota interna", content.Text);
+        Assert.DoesNotContain("/admin/", content.Html);
+    }
+
+    [Fact]
+    public void CustomerComposer_EncodesHtml_AndFallsBackToReplyWithoutWhatsApp()
+    {
+        var appointment = Booked(TestData.Tuesday(10, 0));
+        appointment.CustomerName = "<script>x</script>";
+        appointment.ServiceName = "Corte & <b>color</b>";
+
+        var content = CustomerEmailComposer.Confirmation(appointment, TestData.Business(), Configured());
+
+        Assert.DoesNotContain("<script>", content.Html);
+        Assert.Contains("Corte &amp; &lt;b&gt;color&lt;/b&gt;", content.Html);
+        Assert.Contains("Responde a este email", content.Text);
+        Assert.DoesNotContain("wa.me", content.Text);
+        Assert.DoesNotContain("Dirección", content.Text);
+    }
+
     // --- Contenido del email ---
 
     [Fact]
@@ -195,6 +324,26 @@ public class NotificationTests
         Assert.Equal("salon@example.com", json.RootElement.GetProperty("to")[0].GetString());
         Assert.Equal("Asunto", json.RootElement.GetProperty("subject").GetString());
         Assert.Equal("<p>Hola</p>", json.RootElement.GetProperty("html").GetString());
+    }
+
+    [Fact]
+    public async Task ResendSender_SendsReplyTo_OnlyWhenSet()
+    {
+        var withReply = new RecordingHandler(HttpStatusCode.OK);
+        await new ResendEmailSender(new HttpClient(withReply), Options.Create(Configured()))
+            .SendAsync(Message with { ReplyTo = "salon@example.com" }, CancellationToken.None);
+        using (var json = JsonDocument.Parse(withReply.Body!))
+        {
+            Assert.Equal("salon@example.com", json.RootElement.GetProperty("reply_to").GetString());
+        }
+
+        var withoutReply = new RecordingHandler(HttpStatusCode.OK);
+        await new ResendEmailSender(new HttpClient(withoutReply), Options.Create(Configured()))
+            .SendAsync(Message, CancellationToken.None);
+        using (var json = JsonDocument.Parse(withoutReply.Body!))
+        {
+            Assert.False(json.RootElement.TryGetProperty("reply_to", out _));
+        }
     }
 
     [Fact]
