@@ -24,16 +24,22 @@ public sealed class ResendEmailSender : IEmailSender
 
     public async Task SendAsync(EmailMessage message, CancellationToken cancellationToken)
     {
+        var payload = new Dictionary<string, object>
+        {
+            ["from"] = message.From,
+            ["to"] = new[] { message.To },
+            ["subject"] = message.Subject,
+            ["html"] = message.Html,
+            ["text"] = message.Text,
+        };
+        if (!string.IsNullOrWhiteSpace(message.ReplyTo))
+        {
+            payload["reply_to"] = message.ReplyTo;
+        }
+
         using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint)
         {
-            Content = JsonContent.Create(new
-            {
-                from = message.From,
-                to = new[] { message.To },
-                subject = message.Subject,
-                html = message.Html,
-                text = message.Text,
-            }),
+            Content = JsonContent.Create(payload),
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.ResendApiKey);
 

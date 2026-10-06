@@ -1,9 +1,9 @@
 namespace Appointments.Api.Configuration;
 
 /// <summary>
-/// Avisos por email al salón (sección <c>Notifications</c>). Se envían con Resend.
-/// Ni la API key ni el email del salón van en el repo: en Azure se definen con
-/// <c>Notifications__ResendApiKey</c> (como secret) y <c>Notifications__SalonEmail</c>.
+/// Emails de las citas (sección <c>Notifications</c>): avisos al salón y confirmación a la
+/// clienta. Se envían con Resend. Ni la API key ni el email del salón van en el repo: en Azure
+/// se definen con <c>Notifications__ResendApiKey</c> (como secret) y <c>Notifications__SalonEmail</c>.
 /// </summary>
 public sealed class NotificationOptions
 {
@@ -21,9 +21,23 @@ public sealed class NotificationOptions
     /// <summary>Enlace a la agenda privada que se incluye en cada aviso.</summary>
     public string AdminUrl { get; set; } = "https://305hairstyle.com/admin/";
 
-    /// <summary>True si hay todo lo necesario para enviar. Si no, los avisos se omiten con un aviso en el log.</summary>
-    public bool IsConfigured =>
-        !string.IsNullOrWhiteSpace(SalonEmail) &&
+    /// <summary>Nombre del salón en el asunto y la firma de la confirmación a la clienta.</summary>
+    public string SalonName { get; set; } = "305 Hair Style";
+
+    /// <summary>Dirección del salón que se incluye en la confirmación a la clienta.</summary>
+    public string? SalonAddress { get; set; }
+
+    /// <summary>Enlace a Google Maps de la dirección (opcional).</summary>
+    public string? SalonMapsUrl { get; set; }
+
+    /// <summary>Número de WhatsApp del salón (p. ej. <c>+1 786 566 9938</c>) para cambios o cancelaciones.</summary>
+    public string? SalonWhatsApp { get; set; }
+
+    /// <summary>True si se puede enviar algún email (API key y remitente).</summary>
+    public bool CanSend =>
         !string.IsNullOrWhiteSpace(FromEmail) &&
         !string.IsNullOrWhiteSpace(ResendApiKey);
+
+    /// <summary>True si hay todo lo necesario para avisar al salón. Si no, los avisos se omiten con un aviso en el log.</summary>
+    public bool IsConfigured => CanSend && !string.IsNullOrWhiteSpace(SalonEmail);
 }
