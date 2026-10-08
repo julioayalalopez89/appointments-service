@@ -2,9 +2,11 @@ using System.Globalization;
 using Appointments.Api.Configuration;
 using Appointments.Api.Models;
 using Appointments.Api.Repositories;
+using Appointments.Api.Security;
 using Appointments.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 
 namespace Appointments.Api.Controllers;
@@ -17,6 +19,7 @@ namespace Appointments.Api.Controllers;
 [Route("api/[controller]")]
 [Produces("application/json")]
 [AllowAnonymous]
+[EnableRateLimiting(RateLimitPolicies.Availability)]
 public class AvailabilityController : ControllerBase
 {
     private readonly IAppointmentRepository _repository;
@@ -43,6 +46,7 @@ public class AvailabilityController : ControllerBase
     [HttpGet]
     [ProducesResponseType(typeof(AvailabilityResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public ActionResult<AvailabilityResponse> Get([FromQuery] DateOnly? date, [FromQuery] int durationMinutes = 30)
     {
         if (date is not { } day)
