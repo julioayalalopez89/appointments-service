@@ -255,7 +255,11 @@ Plantillas (4 variables, en este orden):
 
 Sin `WhatsAppTo`, `WhatsAppPhoneNumberId` y `WhatsAppAccessToken` no se envía ningún WhatsApp.
 
-Configurar en Azure:
+Configurar sin portal ni Cloud Shell (recomendado): guardar el token como secret del repo
+`WHATSAPP_ACCESS_TOKEN` y correr **Actions → Configure WhatsApp notifications → Run workflow**
+(`.github/workflows/configure-whatsapp.yml`, usa el mismo login OIDC que el deploy).
+
+O a mano en Azure:
 
 ```bash
 az containerapp secret set --name appointments-api --resource-group rg-appointments \

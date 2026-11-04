@@ -1,0 +1,93 @@
+# Configura los avisos por WhatsApp (API de Meta) en el Container App, sin usar el portal
+# ni Cloud Shell: usa el mismo login OIDC de Azure que el deploy.
+#
+# Antes de correrlo, guarda el token permanente de Meta como secret del repo:
+#   Settings → Secrets and variables → Actions → New repository secret
+#   Name: WHATSAPP_ACCESS_TOKEN   Value: <token permanente>
+#
+# Luego: Actions → "Configure WhatsApp notifications" → Run workflow.
+
+name: Configure WhatsApp notifications
+
+on:
+  workflow_dispatch:
+    inputs:
+      phone_number_id:
+        description: "Phone number ID (Meta → WhatsApp → Paso 1. Probar)"
+        required: true
+      to:
+        description: "Número que recibe los avisos, con + (ej. +17865662770)"
+        required: true
+      monthly_limit:
+        description: "Tope de WhatsApp por mes (0 = apagar)"
+        required: true
+        default: "100"
+      template_language:
+        description: "Idioma de las plantillas (es, es_MX, es_ES...)"
+        required: true
+        default: "es"
+
+permissions:
+  id-token: write   # login OIDC a Azure
+  contents: read
+
+env:
+  CONTAINERAPP_NAME: appointments-api
+
+jobs:
+  configure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check inputs
+        env:
+          TOKEN: ${{ secrets.WHATSAPP_ACCESS_TOKEN }}
+          PHONE_NUMBER_ID: ${{ inputs.phone_number_id }}
+          TO: ${{ inputs.to }}
+          LIMIT: ${{ inputs.monthly_limit }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Falta el secret WHATSAPP_ACCESS_TOKEN (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          [[ "$PHONE_NUMBER_ID" =~ ^[0-9]+$ ]] || { echo "::error::phone_number_id debe ser solo números."; exit 1; }
+          [[ "$TO" =~ ^\+[0-9]{8,15}$ ]] || { echo "::error::to debe ser +<código><número>, sin espacios (ej. +17865662770)."; exit 1; }
+          [[ "$LIMIT" =~ ^[0-9]+$ ]] || { echo "::error::monthly_limit debe ser un número."; exit 1; }
+
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Ensure containerapp extension
+        run: az extension add --name containerapp --upgrade
+
+      - name: Save token as Container App secret
+        env:
+          TOKEN: ${{ secrets.WHATSAPP_ACCESS_TOKEN }}
+        run: |
+          az containerapp secret set \
+            --name "${{ env.CONTAINERAPP_NAME }}" \
+            --resource-group "${{ vars.AKS_RESOURCE_GROUP }}" \
+            --secrets "whatsapp-token=$TOKEN" \
+            --output none
+
+      - name: Set environment variables
+        env:
+          PHONE_NUMBER_ID: ${{ inputs.phone_number_id }}
+          TO: ${{ inputs.to }}
+          LIMIT: ${{ inputs.monthly_limit }}
+          LANG_CODE: ${{ inputs.template_language }}
+        run: |
+          az containerapp update \
+            --name "${{ env.CONTAINERAPP_NAME }}" \
+            --resource-group "${{ vars.AKS_RESOURCE_GROUP }}" \
+            --set-env-vars \
+              "Notifications__WhatsAppAccessToken=secretref:whatsapp-token" \
+              "Notifications__WhatsAppPhoneNumberId=$PHONE_NUMBER_ID" \
+              "Notifications__WhatsAppTo=$TO" \
+              "Notifications__WhatsAppMonthlyLimit=$LIMIT" \
+              "Notifications__WhatsAppTemplateLanguage=$LANG_CODE" \
+            --output none
+          echo "Listo: WhatsApp configurado (tope $LIMIT por mes, idioma $LANG_CODE)."
