@@ -220,6 +220,50 @@ dotnet user-secrets set "Notifications:SalonEmail" "<tu-email>"
 dotnet user-secrets set "Notifications:FromEmail" "onboarding@resend.dev"
 ```
 
+
+## WhatsApp: aviso al salón (CallMeBot, gratis)
+
+Además del email, cada cita nueva o cancelada manda un WhatsApp al número del salón con
+[CallMeBot](https://www.callmebot.com) (gratis para mandarse mensajes a uno mismo):
+
+```
+📅 *Nueva cita*
+👤 Ana Pérez
+✂️ Corte + Peinado
+🗓️ sábado 8 de noviembre de 2026, 10:00 AM – 11:00 AM
+📞 (305) 555-0100
+💬 https://wa.me/13055550100
+Agenda: https://305hairstyle.com/admin/
+```
+
+- Se envía en segundo plano (`WhatsAppNotificationWorker`), de uno en uno y con 3 s entre mensajes.
+- Si CallMeBot falla, la cita se guarda igual, el error queda en el log y sigue llegando el email.
+- No es un servicio oficial de WhatsApp: puede tardar unos segundos o fallar algún día.
+
+| Variable | Qué es |
+|---|---|
+| `Notifications__WhatsAppPhone` | Número que recibe los avisos, formato internacional (`+17865669938`). |
+| `Notifications__CallMeBotApiKey` | API key que manda CallMeBot al activar el número. **Secret.** |
+
+Sin las dos variables no se envía ningún WhatsApp.
+
+### Pasos para Julio (una sola vez)
+
+1. En el teléfono que recibirá los avisos, guardar el contacto de CallMeBot (el número actual está
+   en callmebot.com → WhatsApp API) y mandarle por WhatsApp: `I allow callmebot to send me messages`.
+2. El bot responde con la API key. Si no llega en 2 minutos, probar otra vez a las 24 h.
+3. Guardarla en el Container App:
+
+```bash
+az containerapp secret set --name appointments-api --resource-group rg-appointments \
+  --secrets callmebot-api-key=<tu_api_key>
+az containerapp update --name appointments-api --resource-group rg-appointments \
+  --set-env-vars Notifications__CallMeBotApiKey=secretref:callmebot-api-key \
+                 Notifications__WhatsAppPhone=+1XXXXXXXXXX
+```
+
+4. Hacer una reserva de prueba y comprobar que llega el WhatsApp.
+
 ## Configuración del negocio (horario y capacidad)
 
 La sección `Business` de `appsettings.json` define las reglas para calcular

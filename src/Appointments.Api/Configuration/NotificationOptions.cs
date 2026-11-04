@@ -33,6 +33,20 @@ public sealed class NotificationOptions
     /// <summary>Número de WhatsApp del salón (p. ej. <c>+1 786 566 9938</c>) para cambios o cancelaciones.</summary>
     public string? SalonWhatsApp { get; set; }
 
+    /// <summary>
+    /// Número de WhatsApp que recibe los avisos de citas (formato internacional, p. ej. <c>+17865669938</c>).
+    /// Se envían con CallMeBot (gratis, solo a números que lo activaron). En Azure: <c>Notifications__WhatsAppPhone</c>.
+    /// </summary>
+    public string? WhatsAppPhone { get; set; }
+
+    /// <summary>API key de CallMeBot que el bot envía al activar el número. En Azure, como secret: <c>Notifications__CallMeBotApiKey</c>.</summary>
+    public string? CallMeBotApiKey { get; set; }
+
+    /// <summary>True si hay número y API key de CallMeBot. Si no, los avisos por WhatsApp se omiten.</summary>
+    public bool IsWhatsAppConfigured =>
+        !string.IsNullOrWhiteSpace(WhatsAppPhone) &&
+        !string.IsNullOrWhiteSpace(CallMeBotApiKey);
+
     /// <summary>True si se puede enviar algún email (API key y remitente).</summary>
     public bool CanSend =>
         !string.IsNullOrWhiteSpace(FromEmail) &&
