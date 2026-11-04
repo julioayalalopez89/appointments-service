@@ -76,6 +76,80 @@ namespace Appointments.Api.Migrations
 
                     b.ToTable("Appointments");
                 });
+
+            modelBuilder.Entity("Appointments.Api.Models.BusinessDay", b =>
+                {
+                    b.Property<int>("Day")
+                        .HasColumnType("int");
+
+                    b.Property<TimeOnly>("Close")
+                        .HasColumnType("time");
+
+                    b.Property<bool>("IsOpen")
+                        .HasColumnType("bit");
+
+                    b.Property<TimeOnly>("Open")
+                        .HasColumnType("time");
+
+                    b.HasKey("Day");
+
+                    b.ToTable("BusinessDays");
+                });
+
+            modelBuilder.Entity("Appointments.Api.Models.CatalogService", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("DurationMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("Popular")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Price")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CatalogServices");
+                });
+
+            modelBuilder.Entity("Appointments.Api.Models.ClosedDate", b =>
+                {
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Date");
+
+                    b.ToTable("ClosedDates");
+                });
 #pragma warning restore 612, 618
         }
     }

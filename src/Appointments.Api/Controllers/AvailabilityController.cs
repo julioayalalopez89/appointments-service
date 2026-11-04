@@ -20,13 +20,13 @@ namespace Appointments.Api.Controllers;
 public class AvailabilityController : ControllerBase
 {
     private readonly IAppointmentRepository _repository;
-    private readonly BusinessOptions _business;
+    private readonly IBusinessScheduleProvider _business;
     private readonly TimeProvider _timeProvider;
 
-    public AvailabilityController(IAppointmentRepository repository, IOptions<BusinessOptions> business, TimeProvider timeProvider)
+    public AvailabilityController(IAppointmentRepository repository, IBusinessScheduleProvider business, TimeProvider timeProvider)
     {
         _repository = repository;
-        _business = business.Value;
+        _business = business;
         _timeProvider = timeProvider;
     }
 
@@ -55,14 +55,14 @@ public class AvailabilityController : ControllerBase
             return BadRequest(new { message = "durationMinutes must be between 5 and 480." });
         }
 
-        var (dayStart, dayEnd) = BookingRules.GetDayBounds(_business, day);
+        var (dayStart, dayEnd) = BookingRules.GetDayBounds(_business.Current(), day);
         var appointments = _repository.GetOverlapping(dayStart, dayEnd);
-        var slots = BookingRules.GetAvailableSlots(_business, day, durationMinutes, _timeProvider.GetUtcNow(), appointments);
+        var slots = BookingRules.GetAvailableSlots(_business.Current(), day, durationMinutes, _timeProvider.GetUtcNow(), appointments);
 
         return Ok(new AvailabilityResponse
         {
             Date = day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            TimeZone = _business.TimeZone,
+            TimeZone = _business.Current().TimeZone,
             Slots = slots.Select(s => s.ToString("HH:mm", CultureInfo.InvariantCulture)).ToList(),
         });
     }
