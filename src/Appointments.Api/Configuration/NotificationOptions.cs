@@ -60,7 +60,7 @@ public sealed class NotificationOptions
     public int WhatsAppMonthlyLimit { get; set; } = 100;
 
     /// <summary>Versión de la Graph API de Meta.</summary>
-    public string WhatsAppGraphVersion { get; set; } = "v23.0";
+    public string WhatsAppGraphVersion { get; set; } = "v25.0";
 
     /// <summary>True si hay destinatario, Phone number ID y token. Si no, no se envía ningún WhatsApp.</summary>
     public bool IsWhatsAppConfigured =>

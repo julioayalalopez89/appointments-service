@@ -74,7 +74,7 @@ public class WhatsAppNotificationTests
 
         await sender.SendAsync(Message(), CancellationToken.None);
 
-        Assert.Equal("https://graph.facebook.com/v23.0/1234567890/messages", handler.Url);
+        Assert.Equal("https://graph.facebook.com/v25.0/1234567890/messages", handler.Url);
         Assert.Equal("Bearer EAAtoken", handler.Authorization);
         using var json = JsonDocument.Parse(handler.Body!);
         var root = json.RootElement;
