@@ -1,3 +1,4 @@
+using Appointments.Api.Services.Notifications;
 using Appointments.Api.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,6 +14,7 @@ public class AppointmentsDbContext : DbContext
     public DbSet<CatalogService> CatalogServices => Set<CatalogService>();
     public DbSet<BusinessDay> BusinessDays => Set<BusinessDay>();
     public DbSet<ClosedDate> ClosedDates => Set<ClosedDate>();
+    public DbSet<NotificationUsage> NotificationUsage => Set<NotificationUsage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -43,6 +45,14 @@ public class AppointmentsDbContext : DbContext
         {
             entity.HasKey(d => d.Day);
             entity.Property(d => d.Day).ValueGeneratedNever();
+        });
+
+        modelBuilder.Entity<NotificationUsage>(entity =>
+        {
+            entity.ToTable("NotificationUsage");
+            entity.HasKey(u => new { u.Channel, u.Month });
+            entity.Property(u => u.Channel).HasMaxLength(20);
+            entity.Property(u => u.Month).HasMaxLength(7);
         });
 
         modelBuilder.Entity<ClosedDate>(entity =>

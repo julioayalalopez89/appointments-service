@@ -26,9 +26,25 @@ builder.Services.Configure<SecurityOptions>(builder.Configuration.GetSection(Sec
 // plano; sin API key o sin email del salón no se envía nada (solo un aviso en el log).
 builder.Services.Configure<NotificationOptions>(builder.Configuration.GetSection(NotificationOptions.SectionName));
 builder.Services.AddSingleton<EmailQueue>();
-builder.Services.AddSingleton<INotificationService, EmailNotificationService>();
+builder.Services.AddSingleton<EmailNotificationService>();
+builder.Services.AddSingleton<INotificationService>(sp => new CompositeNotificationService(
+    new INotificationService[]
+    {
+        sp.GetRequiredService<EmailNotificationService>(),
+        sp.GetRequiredService<WhatsAppNotificationService>(),
+    },
+    sp.GetRequiredService<ILogger<CompositeNotificationService>>()));
 builder.Services.AddHttpClient<IEmailSender, ResendEmailSender>(client => client.Timeout = TimeSpan.FromSeconds(15));
 builder.Services.AddHostedService<EmailNotificationWorker>();
+
+// Aviso al salón por WhatsApp (API oficial de Meta, con plantillas) y tope mensual de mensajes
+// guardado en la base de datos. Sin destinatario, Phone number ID y token no se envía nada.
+builder.Services.AddSingleton<WhatsAppQueue>();
+builder.Services.AddSingleton<WhatsAppNotificationService>();
+builder.Services.AddScoped<INotificationUsageStore, EfNotificationUsageStore>();
+builder.Services.AddScoped<WhatsAppDispatcher>();
+builder.Services.AddHttpClient<IWhatsAppSender, MetaWhatsAppSender>(client => client.Timeout = TimeSpan.FromSeconds(20));
+builder.Services.AddHostedService<WhatsAppNotificationWorker>();
 
 // Límite de peticiones por IP en los endpoints públicos (reservar y disponibilidad).
 // Ver Security/RateLimitPolicies.cs y la sección RateLimiting de appsettings.json.

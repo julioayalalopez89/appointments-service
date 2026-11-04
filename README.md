@@ -220,6 +220,53 @@ dotnet user-secrets set "Notifications:SalonEmail" "<tu-email>"
 dotnet user-secrets set "Notifications:FromEmail" "onboarding@resend.dev"
 ```
 
+
+## WhatsApp: aviso al salón (API oficial de Meta, con tope mensual)
+
+Además del email, cada cita nueva o cancelada manda un WhatsApp al salón con la
+[WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api) de Meta.
+
+- Meta solo deja escribir primero con **plantillas aprobadas** (categoría *Utility*) y **cobra cada
+  mensaje entregado** (en EE. UU., del orden de medio centavo de dólar; ver el rate card de Meta).
+- **Tope mensual:** `Notifications__WhatsAppMonthlyLimit` (100 por defecto). Se cuenta en la base de
+  datos (tabla `NotificationUsage`, mes en hora de Miami). Al llegar al tope no se envían más WhatsApp
+  hasta el día 1; los emails siguen. Un envío que falla también cuenta, así nunca se pasa del tope.
+  `0` = no enviar ninguno.
+- `GET /api/notifications/whatsapp` (con `X-Api-Key`) devuelve `{ configured, month, sent, monthlyLimit }`.
+- Si Meta falla, la cita se guarda igual y el error queda en el log.
+
+Plantillas (4 variables, en este orden):
+
+| Plantilla | Texto sugerido |
+|---|---|
+| `nueva_cita` | `Nueva cita reservada: {{1}} · {{2}} · {{3}} · Tel. {{4}}` |
+| `cita_cancelada` | `Cita cancelada: {{1}} · {{2}} · {{3}} · Tel. {{4}}` |
+
+`{{1}}` clienta · `{{2}}` servicio · `{{3}}` fecha y hora (`sábado 8 de noviembre de 2026, 10:00 AM – 11:00 AM`) · `{{4}}` teléfono.
+
+| Variable | Qué es |
+|---|---|
+| `Notifications__WhatsAppTo` | Número que recibe los avisos (`+17865669938`). |
+| `Notifications__WhatsAppPhoneNumberId` | *Phone number ID* del número que envía (Meta → WhatsApp → API Setup). |
+| `Notifications__WhatsAppAccessToken` | Token permanente de un usuario del sistema. **Secret.** |
+| `Notifications__WhatsAppMonthlyLimit` | Tope de mensajes por mes. Por defecto `100`. |
+| `Notifications__WhatsAppTemplateLanguage` | Idioma de las plantillas. Por defecto `es`. |
+| `Notifications__WhatsAppBookedTemplate` / `...CancelledTemplate` | Nombres de las plantillas. Por defecto `nueva_cita` / `cita_cancelada`. |
+
+Sin `WhatsAppTo`, `WhatsAppPhoneNumberId` y `WhatsAppAccessToken` no se envía ningún WhatsApp.
+
+Configurar en Azure:
+
+```bash
+az containerapp secret set --name appointments-api --resource-group rg-appointments \
+  --secrets whatsapp-token=<token>
+az containerapp update --name appointments-api --resource-group rg-appointments \
+  --set-env-vars Notifications__WhatsAppAccessToken=secretref:whatsapp-token \
+                 Notifications__WhatsAppPhoneNumberId=<phone-number-id> \
+                 Notifications__WhatsAppTo=+1XXXXXXXXXX \
+                 Notifications__WhatsAppMonthlyLimit=100
+```
+
 ## Configuración del negocio (horario y capacidad)
 
 La sección `Business` de `appsettings.json` define las reglas para calcular

@@ -33,6 +33,41 @@ public sealed class NotificationOptions
     /// <summary>Número de WhatsApp del salón (p. ej. <c>+1 786 566 9938</c>) para cambios o cancelaciones.</summary>
     public string? SalonWhatsApp { get; set; }
 
+    // ───── WhatsApp (API oficial de Meta: WhatsApp Cloud API) ─────
+
+    /// <summary>Número que recibe los avisos de citas, formato internacional (<c>+17865669938</c>). <c>Notifications__WhatsAppTo</c>.</summary>
+    public string? WhatsAppTo { get; set; }
+
+    /// <summary>"Phone number ID" del número que envía (Meta → WhatsApp → API Setup). <c>Notifications__WhatsAppPhoneNumberId</c>.</summary>
+    public string? WhatsAppPhoneNumberId { get; set; }
+
+    /// <summary>Token de acceso permanente (usuario del sistema). Secret: <c>Notifications__WhatsAppAccessToken</c>.</summary>
+    public string? WhatsAppAccessToken { get; set; }
+
+    /// <summary>Plantilla aprobada para citas nuevas (4 variables: clienta, servicio, fecha y hora, teléfono).</summary>
+    public string WhatsAppBookedTemplate { get; set; } = "nueva_cita";
+
+    /// <summary>Plantilla aprobada para citas canceladas (mismas 4 variables).</summary>
+    public string WhatsAppCancelledTemplate { get; set; } = "cita_cancelada";
+
+    /// <summary>Idioma con el que se aprobaron las plantillas (p. ej. <c>es</c>, <c>es_MX</c>).</summary>
+    public string WhatsAppTemplateLanguage { get; set; } = "es";
+
+    /// <summary>
+    /// Máximo de WhatsApp por mes (en la zona horaria del negocio). Al llegar, se dejan de enviar
+    /// hasta el mes siguiente y solo llegan los emails. 0 = no enviar ninguno.
+    /// </summary>
+    public int WhatsAppMonthlyLimit { get; set; } = 100;
+
+    /// <summary>Versión de la Graph API de Meta.</summary>
+    public string WhatsAppGraphVersion { get; set; } = "v23.0";
+
+    /// <summary>True si hay destinatario, Phone number ID y token. Si no, no se envía ningún WhatsApp.</summary>
+    public bool IsWhatsAppConfigured =>
+        !string.IsNullOrWhiteSpace(WhatsAppTo) &&
+        !string.IsNullOrWhiteSpace(WhatsAppPhoneNumberId) &&
+        !string.IsNullOrWhiteSpace(WhatsAppAccessToken);
+
     /// <summary>True si se puede enviar algún email (API key y remitente).</summary>
     public bool CanSend =>
         !string.IsNullOrWhiteSpace(FromEmail) &&
