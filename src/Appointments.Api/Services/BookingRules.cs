@@ -25,10 +25,13 @@ public static class BookingRules
         var localStart = TimeZoneInfo.ConvertTime(start, timeZone);
         var localEnd = TimeZoneInfo.ConvertTime(start.AddMinutes(durationMinutes), timeZone);
 
-        var schedule = options.GetScheduleFor(localStart.DayOfWeek);
+        var localDate = DateOnly.FromDateTime(localStart.DateTime);
+        var schedule = options.GetScheduleFor(localDate);
         if (schedule is null)
         {
-            return $"The business is closed on {localStart.DayOfWeek}.";
+            return options.ClosedDates.Contains(localDate)
+                ? $"The business is closed on {localDate:yyyy-MM-dd}."
+                : $"The business is closed on {localStart.DayOfWeek}.";
         }
 
         var startTime = TimeOnly.FromDateTime(localStart.DateTime);
@@ -77,7 +80,7 @@ public static class BookingRules
     /// <param name="appointments">Citas de ese día (las canceladas se ignoran).</param>
     public static IReadOnlyList<TimeOnly> GetAvailableSlots(BusinessOptions options, DateOnly date, int durationMinutes, DateTimeOffset now, IEnumerable<Appointment> appointments)
     {
-        var schedule = options.GetScheduleFor(date.DayOfWeek);
+        var schedule = options.GetScheduleFor(date);
         if (schedule is null || durationMinutes <= 0)
         {
             return Array.Empty<TimeOnly>();

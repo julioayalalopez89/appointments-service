@@ -25,9 +25,20 @@ public class BusinessOptions
     /// <summary>Horario de apertura. Un día que no aparece en la lista está cerrado.</summary>
     public List<DaySchedule> OpeningHours { get; set; } = new();
 
-    /// <summary>Devuelve el horario de un día, o null si el negocio está cerrado ese día.</summary>
+    /// <summary>
+    /// Días concretos en que el negocio no atiende (festivos, vacaciones), en hora local.
+    /// No sale de la configuración: lo rellena <see cref="Services.BusinessScheduleProvider"/>
+    /// con lo guardado desde el panel.
+    /// </summary>
+    public HashSet<DateOnly> ClosedDates { get; set; } = new();
+
+    /// <summary>Devuelve el horario de un día de la semana, o null si el negocio está cerrado ese día.</summary>
     public DaySchedule? GetScheduleFor(DayOfWeek day) =>
         OpeningHours.FirstOrDefault(d => d.Day == day);
+
+    /// <summary>Horario de una fecha concreta: null si ese día de la semana cierra o la fecha está en <see cref="ClosedDates"/>.</summary>
+    public DaySchedule? GetScheduleFor(DateOnly date) =>
+        ClosedDates.Contains(date) ? null : GetScheduleFor(date.DayOfWeek);
 
     /// <summary>Resuelve <see cref="TimeZone"/> a un <see cref="TimeZoneInfo"/>.</summary>
     public TimeZoneInfo GetTimeZoneInfo() => TimeZoneInfo.FindSystemTimeZoneById(TimeZone);

@@ -10,6 +10,9 @@ public class AppointmentsDbContext : DbContext
     }
 
     public DbSet<Appointment> Appointments => Set<Appointment>();
+    public DbSet<CatalogService> CatalogServices => Set<CatalogService>();
+    public DbSet<BusinessDay> BusinessDays => Set<BusinessDay>();
+    public DbSet<ClosedDate> ClosedDates => Set<ClosedDate>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -24,6 +27,28 @@ public class AppointmentsDbContext : DbContext
             entity.Property(a => a.ProviderName).HasMaxLength(200);
             entity.Property(a => a.Notes).HasMaxLength(1000);
             entity.Property(a => a.Status).HasConversion<string>().HasMaxLength(20);
+        });
+
+        modelBuilder.Entity<CatalogService>(entity =>
+        {
+            entity.HasKey(s => s.Id);
+            entity.Property(s => s.Id).ValueGeneratedNever();
+            entity.Property(s => s.Category).IsRequired().HasMaxLength(100);
+            entity.Property(s => s.Name).IsRequired().HasMaxLength(200);
+            entity.Property(s => s.Price).IsRequired().HasMaxLength(30);
+            entity.Property(s => s.Description).HasMaxLength(500);
+        });
+
+        modelBuilder.Entity<BusinessDay>(entity =>
+        {
+            entity.HasKey(d => d.Day);
+            entity.Property(d => d.Day).ValueGeneratedNever();
+        });
+
+        modelBuilder.Entity<ClosedDate>(entity =>
+        {
+            entity.HasKey(d => d.Date);
+            entity.Property(d => d.Reason).HasMaxLength(200);
         });
     }
 }

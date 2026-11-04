@@ -36,6 +36,15 @@ internal sealed class FakeNotificationService : INotificationService
     }
 }
 
+/// <summary>Horario fijo para los tests unitarios de los controladores (sin base de datos).</summary>
+internal sealed class StaticScheduleProvider : Appointments.Api.Services.IBusinessScheduleProvider
+{
+    private readonly BusinessOptions _options;
+    public StaticScheduleProvider(BusinessOptions options) => _options = options;
+    public BusinessOptions Current() => _options;
+    public bool IsCustomized => false;
+}
+
 internal static class TestData
 {
     /// <summary>"Ahora" en los tests: lunes 28/09/2026 12:00 hora de Nueva York (EDT, UTC-4).</summary>
@@ -61,13 +70,13 @@ internal static class TestData
         IAppointmentRepository repository, int maxConcurrent = 1, INotificationService? notifications = null) =>
         new(repository,
             NullLogger<AppointmentsController>.Instance,
-            Options.Create(Business(maxConcurrent)),
+            new StaticScheduleProvider(Business(maxConcurrent)),
             new FixedTimeProvider(Now),
             notifications ?? new FakeNotificationService());
 
     public static AvailabilityController Availability(IAppointmentRepository repository, int maxConcurrent = 1, DateTimeOffset? now = null) =>
         new(repository,
-            Options.Create(Business(maxConcurrent)),
+            new StaticScheduleProvider(Business(maxConcurrent)),
             new FixedTimeProvider(now ?? Now));
 
     public static CreateAppointmentRequest Request(DateTimeOffset start, int durationMinutes = 30, string? provider = null) => new()

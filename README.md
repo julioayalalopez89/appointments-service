@@ -104,6 +104,28 @@ times for an appointment **without a stylist**, in the business time zone:
 - Closed day → `"slots": []`. Missing `date` or `durationMinutes` outside 5–480 → `400`.
 - `durationMinutes` is optional (default `30`). The endpoint needs no credentials.
 
+### Services and schedule (editable from the admin panel)
+
+`GET /api/catalog` (public) returns the active services (name, category, price, duration,
+description, popular) and the booking schedule (7 days with `isOpen`/`open`/`close`, upcoming
+closed dates, time zone, slot interval). The website reads it for the services section and the
+booking form.
+
+Protected with `X-Api-Key`:
+
+| Method | Route | Description |
+|---|---|---|
+| GET | `/api/catalog/services` | All services, including hidden ones |
+| PUT | `/api/catalog/services` | Replace the whole list (order = list order; known `id` = update, missing = delete) |
+| GET | `/api/catalog/schedule` | Weekly hours + all closed dates |
+| PUT | `/api/catalog/schedule` | Replace weekly hours (`days`, `day` 0 = Sunday … 6 = Saturday, `HH:mm`) and `closedDates` |
+
+- While nothing has been saved, availability keeps using `Business:OpeningHours` from the config
+  (`schedule.customized` is `false`). After the first save, the database wins — even if every day is closed.
+- Closed dates (holidays, vacations) return no slots and reject bookings on that day.
+- Existing appointments are never touched by a schedule change.
+- Tables: `CatalogServices`, `BusinessDays`, `ClosedDates` (migration `ServiceCatalogAndSchedule`, applied on startup).
+
 Swagger UI (interactive API docs) is at `/swagger` when running in
 Development — `dotnet run` opens it in your browser automatically.
 

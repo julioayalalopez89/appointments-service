@@ -2,6 +2,7 @@ using Appointments.Api.Data;
 using Appointments.Api.Configuration;
 using Appointments.Api.Repositories;
 using Appointments.Api.Security;
+using Appointments.Api.Services;
 using Appointments.Api.Services.Notifications;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
@@ -58,6 +59,11 @@ builder.Services.AddDbContext<AppointmentsDbContext>(options =>
 // Scoped (not Singleton) porque depende del DbContext, que también es Scoped.
 builder.Services.AddScoped<IAppointmentRepository, EfAppointmentRepository>();
 
+// Servicios y horario editables desde el panel (/admin/ de la web). Sin nada guardado,
+// la disponibilidad sigue usando Business:OpeningHours.
+builder.Services.AddScoped<ICatalogRepository, EfCatalogRepository>();
+builder.Services.AddScoped<IBusinessScheduleProvider, BusinessScheduleProvider>();
+
 builder.Services.AddHealthChecks();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -111,7 +117,7 @@ app.UseRateLimiter();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHealthChecks("/healthz");
-app.MapGet("/", () => Results.Ok(new { service = "Appointments.Api", status = "running", version = "1.1" }));
+app.MapGet("/", () => Results.Ok(new { service = "Appointments.Api", status = "running", version = "1.2" }));
 
 app.Run();
 

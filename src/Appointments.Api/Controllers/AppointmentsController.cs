@@ -17,20 +17,20 @@ public class AppointmentsController : ControllerBase
 {
     private readonly IAppointmentRepository _repository;
     private readonly ILogger<AppointmentsController> _logger;
-    private readonly BusinessOptions _business;
+    private readonly IBusinessScheduleProvider _business;
     private readonly TimeProvider _timeProvider;
     private readonly INotificationService _notifications;
 
     public AppointmentsController(
         IAppointmentRepository repository,
         ILogger<AppointmentsController> logger,
-        IOptions<BusinessOptions> business,
+        IBusinessScheduleProvider business,
         TimeProvider timeProvider,
         INotificationService notifications)
     {
         _repository = repository;
         _logger = logger;
-        _business = business.Value;
+        _business = business;
         _timeProvider = timeProvider;
         _notifications = notifications;
     }
@@ -64,7 +64,7 @@ public class AppointmentsController : ControllerBase
             return ValidationProblem("DurationMinutes must be positive.");
         }
 
-        var scheduleError = BookingRules.ValidateSchedule(_business, request.StartTime, request.DurationMinutes, _timeProvider.GetUtcNow());
+        var scheduleError = BookingRules.ValidateSchedule(_business.Current(), request.StartTime, request.DurationMinutes, _timeProvider.GetUtcNow());
         if (scheduleError is not null)
         {
             return BadRequest(new { message = scheduleError });
@@ -109,7 +109,7 @@ public class AppointmentsController : ControllerBase
         var timeChanged = existing.StartTime != request.StartTime || existing.DurationMinutes != request.DurationMinutes;
         if (timeChanged)
         {
-            var scheduleError = BookingRules.ValidateSchedule(_business, request.StartTime, request.DurationMinutes, _timeProvider.GetUtcNow());
+            var scheduleError = BookingRules.ValidateSchedule(_business.Current(), request.StartTime, request.DurationMinutes, _timeProvider.GetUtcNow());
             if (scheduleError is not null)
             {
                 return BadRequest(new { message = scheduleError });
@@ -186,7 +186,7 @@ public class AppointmentsController : ControllerBase
     private bool HasConflict(string? providerName, DateTimeOffset start, DateTimeOffset end, Guid? excludingId = null)
     {
         var overlapping = _repository.GetOverlapping(start, end, excludingId);
-        return BookingRules.HasConflict(_business, providerName, start, end, overlapping);
+        return BookingRules.HasConflict(_business.Current(), providerName, start, end, overlapping);
     }
 
     private static string ConflictMessage(string? providerName) =>
