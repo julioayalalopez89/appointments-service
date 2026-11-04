@@ -5,6 +5,7 @@ using Appointments.Api.Security;
 using Appointments.Api.Services;
 using Appointments.Api.Services.Notifications;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 
 namespace Appointments.Api.Controllers;
@@ -52,7 +53,10 @@ public class AppointmentsController : ControllerBase
     }
 
     /// <summary>Book a new appointment. Public: the website calls it without credentials.</summary>
+    /// <remarks>Rate limited per IP (RateLimiting:BookingsPerHour, default 10/hour): returns 429 when exceeded.</remarks>
     [HttpPost]
+    [EnableRateLimiting(RateLimitPolicies.Bookings)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public ActionResult<Appointment> Create([FromBody] CreateAppointmentRequest request)
     {
         if (request.DurationMinutes <= 0)

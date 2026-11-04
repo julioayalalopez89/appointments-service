@@ -3,6 +3,7 @@ using Appointments.Api.Configuration;
 using Appointments.Api.Repositories;
 using Appointments.Api.Security;
 using Appointments.Api.Services.Notifications;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -27,6 +28,22 @@ builder.Services.AddSingleton<EmailQueue>();
 builder.Services.AddSingleton<INotificationService, EmailNotificationService>();
 builder.Services.AddHttpClient<IEmailSender, ResendEmailSender>(client => client.Timeout = TimeSpan.FromSeconds(15));
 builder.Services.AddHostedService<EmailNotificationWorker>();
+
+// Límite de peticiones por IP en los endpoints públicos (reservar y disponibilidad).
+// Ver Security/RateLimitPolicies.cs y la sección RateLimiting de appsettings.json.
+builder.Services.AddAppointmentsRateLimiting(builder.Configuration);
+
+// La API corre detrás del ingress de Azure Container Apps: la IP real del cliente
+// llega en X-Forwarded-For. ForwardLimit = 1 toma solo la última entrada (la que
+// añade el ingress), así un cliente no puede saltarse el límite inventando IPs.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+    // El ingress no tiene una IP fija conocida: se confía en el proxy inmediato.
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // Reloj inyectable: en los tests se sustituye por una hora fija.
 builder.Services.AddSingleton(TimeProvider.System);
@@ -67,6 +84,8 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
+
 // Aplica las migraciones automáticamente al arrancar — crea las tablas la
 // primera vez, sin que tengas que correr un comando aparte en producción.
 // Solo con una base de datos relacional: los tests de integración usan el
@@ -87,6 +106,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors();
+// Después de CORS: así la respuesta 429 lleva las cabeceras CORS y la web puede leer el mensaje.
+app.UseRateLimiter();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHealthChecks("/healthz");

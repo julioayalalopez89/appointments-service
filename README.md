@@ -261,6 +261,31 @@ curl -i -X OPTIONS http://localhost:5043/api/availability \
 # → 204 con Access-Control-Allow-Origin: http://localhost:5173
 ```
 
+## Rate limiting (anti-spam)
+
+Los endpoints públicos tienen un límite de peticiones **por IP** (limitador nativo de
+ASP.NET Core, ventana fija). Los de gestión (con `X-Api-Key`) no tienen límite.
+
+| Endpoint | Clave | Por defecto |
+|---|---|---|
+| `POST /api/appointments` | `RateLimiting:BookingsPerHour` | 10 reservas por hora |
+| `GET /api/availability` | `RateLimiting:AvailabilityPerMinute` | 60 consultas por minuto |
+
+Al pasarse del límite la API responde **429 Too Many Requests** con la cabecera
+`Retry-After` (segundos) y un JSON como
+`{ "message": "Too many requests. Please try again in 42 minutes." }`.
+
+La IP del cliente se toma de `X-Forwarded-For` (la añade el ingress de Azure Container
+Apps; solo se usa la última entrada). Los contadores viven en memoria: si la app escala a
+varias réplicas, cada una cuenta por separado.
+
+Para cambiar los límites en Azure:
+
+```bash
+az containerapp update --name appointments-api --resource-group <rg> \
+  --set-env-vars RateLimiting__BookingsPerHour=20 RateLimiting__AvailabilityPerMinute=120
+```
+
 ## Run it in Docker
 
 ```bash
