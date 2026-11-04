@@ -150,6 +150,24 @@ namespace Appointments.Api.Migrations
 
                     b.ToTable("ClosedDates");
                 });
+
+            modelBuilder.Entity("Appointments.Api.Services.Notifications.NotificationUsage", b =>
+                {
+                    b.Property<string>("Channel")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Month")
+                        .HasMaxLength(7)
+                        .HasColumnType("nvarchar(7)");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("int");
+
+                    b.HasKey("Channel", "Month");
+
+                    b.ToTable("NotificationUsage", (string)null);
+                });
 #pragma warning restore 612, 618
         }
     }
