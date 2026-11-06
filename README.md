@@ -259,6 +259,11 @@ Configurar sin portal ni Cloud Shell (recomendado): guardar el token como secret
 `WHATSAPP_ACCESS_TOKEN` y correr **Actions → Configure WhatsApp notifications → Run workflow**
 (`.github/workflows/configure-whatsapp.yml`, usa el mismo login OIDC que el deploy).
 
+Para probar y ver qué falta: **Actions → Test WhatsApp notifications → Run workflow**
+(`.github/workflows/test-whatsapp.yml`). Revisa la configuración de Azure, el token, el Phone number ID,
+las plantillas y su idioma, manda un WhatsApp de prueba y muestra los últimos errores de los logs, con un
+resumen ✅/❌ en la página del run.
+
 O a mano en Azure:
 
 ```bash

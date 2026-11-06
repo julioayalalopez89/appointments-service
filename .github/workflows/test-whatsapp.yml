@@ -1,0 +1,148 @@
+# Diagnóstico de los avisos por WhatsApp: revisa paso a paso lo que tiene Azure y lo que
+# responde Meta, y manda un WhatsApp de prueba con la plantilla nueva_cita.
+# Actions → "Test WhatsApp notifications" → Run workflow. El resumen sale en la página del run.
+
+name: Test WhatsApp notifications
+
+on:
+  workflow_dispatch:
+    inputs:
+      waba_id:
+        description: "Identificador de la cuenta de WhatsApp (Meta → Paso 1. Probar), para revisar las plantillas"
+        required: true
+        default: "2114185479457886"
+      send_test:
+        description: "Mandar un WhatsApp de prueba con la plantilla nueva_cita"
+        type: boolean
+        default: true
+
+permissions:
+  id-token: write   # login OIDC a Azure
+  contents: read
+
+env:
+  CONTAINERAPP_NAME: appointments-api
+  GRAPH: https://graph.facebook.com/v25.0
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Ensure containerapp extension
+        run: az extension add --name containerapp --upgrade --only-show-errors
+
+      - name: Diagnose
+        env:
+          TOKEN: ${{ secrets.WHATSAPP_ACCESS_TOKEN }}
+          RG: ${{ vars.AKS_RESOURCE_GROUP }}
+          WABA_ID: ${{ inputs.waba_id }}
+          SEND_TEST: ${{ inputs.send_test }}
+        run: |
+          set -u
+          S="$GITHUB_STEP_SUMMARY"
+          FAIL=0
+          ok()   { echo "- ✅ $1" | tee -a "$S"; }
+          bad()  { echo "- ❌ $1" | tee -a "$S"; FAIL=1; }
+          info() { echo "- ℹ️ $1" | tee -a "$S"; }
+          meta_error() { jq -r '.error | "\(.message) (código \(.code)\(if .error_subcode then ", sub \(.error_subcode)" else "" end))"' 2>/dev/null; }
+
+          echo "## Diagnóstico de WhatsApp" >> "$S"
+          echo "### 1. Configuración en Azure" >> "$S"
+
+          ENVJSON=$(az containerapp show --name "$CONTAINERAPP_NAME" --resource-group "$RG" \
+            --query "properties.template.containers[0].env" -o json)
+          val() { echo "$ENVJSON" | jq -r --arg n "$1" '.[] | select(.name==$n) | (.value // ("secret:" + .secretRef)) // empty'; }
+          PNID=$(val Notifications__WhatsAppPhoneNumberId)
+          TO=$(val Notifications__WhatsAppTo)
+          LIMIT=$(val Notifications__WhatsAppMonthlyLimit)
+          LANG_CODE=$(val Notifications__WhatsAppTemplateLanguage); LANG_CODE=${LANG_CODE:-es}
+          TOKREF=$(val Notifications__WhatsAppAccessToken)
+          BOOKED=$(val Notifications__WhatsAppBookedTemplate); BOOKED=${BOOKED:-nueva_cita}
+          CANCELLED=$(val Notifications__WhatsAppCancelledTemplate); CANCELLED=${CANCELLED:-cita_cancelada}
+
+          [ -n "$PNID" ] && ok "Phone number ID: \`$PNID\`" || bad "Falta Notifications__WhatsAppPhoneNumberId (corre *Configure WhatsApp notifications*)."
+          [ -n "$TO" ] && ok "Destinatario: \`$TO\`" || bad "Falta Notifications__WhatsAppTo."
+          [ -n "$TOKREF" ] && ok "Token: configurado (\`$TOKREF\`)" || bad "Falta Notifications__WhatsAppAccessToken."
+          info "Idioma de plantillas: \`$LANG_CODE\` · tope mensual: \`${LIMIT:-100 (por defecto)}\`"
+          [ "${LIMIT:-100}" = "0" ] && bad "El tope mensual es 0: no se envía ningún WhatsApp."
+
+          echo "### 2. Token de Meta" >> "$S"
+          if [ -z "$TOKEN" ]; then
+            bad "Falta el secret del repo WHATSAPP_ACCESS_TOKEN. (Ojo: este test usa el de GitHub; la API usa el que guardó *Configure* en Azure.)"
+          else
+            R=$(curl -s "$GRAPH/debug_token?input_token=$TOKEN&access_token=$TOKEN")
+            if echo "$R" | jq -e '.data.is_valid == true' >/dev/null 2>&1; then
+              EXP=$(echo "$R" | jq -r '.data.expires_at')
+              SCOPES=$(echo "$R" | jq -r '.data.scopes | join(", ")')
+              [ "$EXP" = "0" ] && ok "Token válido y **no caduca**." || bad "El token caduca (expires_at=$EXP). Genera uno permanente con un *usuario del sistema* (caducidad: Nunca)."
+              echo "$SCOPES" | grep -q whatsapp_business_messaging && ok "Permiso whatsapp_business_messaging." || bad "Al token le falta el permiso whatsapp_business_messaging. Permisos: $SCOPES"
+            else
+              bad "Token inválido o caducado: $(echo "$R" | meta_error)"
+            fi
+          fi
+
+          echo "### 3. Número que envía" >> "$S"
+          if [ -n "$PNID" ] && [ -n "$TOKEN" ]; then
+            R=$(curl -s "$GRAPH/$PNID?fields=display_phone_number,verified_name,quality_rating" -H "Authorization: Bearer $TOKEN")
+            if echo "$R" | jq -e '.display_phone_number' >/dev/null 2>&1; then
+              ok "El Phone number ID existe: $(echo "$R" | jq -r '"\(.display_phone_number) (\(.verified_name))"')"
+            else
+              bad "Meta no reconoce el Phone number ID \`$PNID\`: $(echo "$R" | meta_error). Usa el **Phone Number ID** de *Paso 1. Probar* (no el ID de la app ni del negocio) y corre *Configure* otra vez."
+            fi
+          fi
+
+          echo "### 4. Plantillas" >> "$S"
+          if [ -n "$TOKEN" ]; then
+            R=$(curl -s "$GRAPH/$WABA_ID/message_templates?fields=name,status,language,category&limit=100" -H "Authorization: Bearer $TOKEN")
+            if echo "$R" | jq -e '.data' >/dev/null 2>&1; then
+              for T in "$BOOKED" "$CANCELLED"; do
+                ROWS=$(echo "$R" | jq -r --arg t "$T" '.data[] | select(.name==$t) | "\(.language) \(.status) \(.category)"')
+                if [ -z "$ROWS" ]; then
+                  bad "No existe la plantilla \`$T\`. Créala en WhatsApp Manager → Plantillas de mensajes."
+                  continue
+                fi
+                while read -r L ST CAT; do
+                  MSG="\`$T\` · idioma \`$L\` · estado **$ST** · $CAT"
+                  if [ "$L" != "$LANG_CODE" ]; then info "$MSG (no se usa: Azure tiene idioma \`$LANG_CODE\`)"
+                  elif [ "$ST" = "APPROVED" ]; then ok "$MSG"
+                  else bad "$MSG — tiene que estar APPROVED."; fi
+                done <<< "$ROWS"
+                echo "$ROWS" | awk '{print $1}' | grep -qx "$LANG_CODE" || bad "\`$T\` no existe en el idioma \`$LANG_CODE\`. Cambia el idioma en *Configure* (template_language) a uno de los de arriba."
+              done
+            else
+              bad "No se pudieron leer las plantillas de la cuenta \`$WABA_ID\`: $(echo "$R" | meta_error)"
+            fi
+          fi
+
+          echo "### 5. WhatsApp de prueba" >> "$S"
+          if [ "$SEND_TEST" = "true" ] && [ -n "$PNID" ] && [ -n "$TO" ] && [ -n "$TOKEN" ]; then
+            BODY=$(jq -n --arg to "${TO//[^0-9]/}" --arg t "$BOOKED" --arg l "$LANG_CODE" '{
+              messaging_product: "whatsapp", to: $to, type: "template",
+              template: { name: $t, language: { code: $l }, components: [ { type: "body", parameters: [
+                { type: "text", text: "PRUEBA" }, { type: "text", text: "Diagnóstico" },
+                { type: "text", text: "hoy" }, { type: "text", text: "(000) 000-0000" } ] } ] } }')
+            R=$(curl -s -X POST "$GRAPH/$PNID/messages" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "$BODY")
+            if echo "$R" | jq -e '.messages[0].id' >/dev/null 2>&1; then
+              ok "Meta aceptó el mensaje (\`$(echo "$R" | jq -r '.messages[0].message_status // "accepted"')\`). Debe llegar a $TO en segundos. Si no llega: revisa que $TO esté en la lista de destinatarios del número de prueba, o el método de pago en WhatsApp Manager."
+            else
+              bad "Meta rechazó el mensaje: $(echo "$R" | meta_error)"
+            fi
+          else
+            info "Prueba de envío omitida."
+          fi
+
+          echo "### 6. Últimos avisos en los logs de la API" >> "$S"
+          LOGS=$(az containerapp logs show --name "$CONTAINERAPP_NAME" --resource-group "$RG" --tail 300 --type console --format text 2>/dev/null \
+            | grep -iE "whatsapp" | tail -n 8 | cut -c1-400 || true)
+          if [ -n "$LOGS" ]; then { echo '```'; echo "$LOGS"; echo '```'; } >> "$S"; echo "$LOGS"
+          else info "No hay líneas de WhatsApp en los logs recientes (la API se reinicia al cambiar la configuración)."; fi
+
+          echo "" >> "$S"
+          if [ "$FAIL" = "0" ]; then echo "**Todo en orden.**" >> "$S"; else echo "**Hay que arreglar lo marcado con ❌.**" >> "$S"; exit 1; fi
