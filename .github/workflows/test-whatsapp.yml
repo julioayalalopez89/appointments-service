@@ -58,7 +58,9 @@ jobs:
 
           ENVJSON=$(az containerapp show --name "$CONTAINERAPP_NAME" --resource-group "$RG" \
             --query "properties.template.containers[0].env" -o json)
-          val() { echo "$ENVJSON" | jq -r --arg n "$1" '.[] | select(.name==$n) | (.value // ("secret:" + .secretRef)) // empty'; }
+          # Una variable puede venir con valor o como referencia a un secret (secretRef).
+          val() { echo "$ENVJSON" | jq -r --arg n "$1" '.[] | select(.name==$n) | if ((.secretRef // "") != "") then "secret:" + .secretRef else (.value // empty) end'; }
+          SECRETS=$(az containerapp secret list --name "$CONTAINERAPP_NAME" --resource-group "$RG" --query "[].name" -o tsv | tr '\n' ' ')
           PNID=$(val Notifications__WhatsAppPhoneNumberId)
           TO=$(val Notifications__WhatsAppTo)
           LIMIT=$(val Notifications__WhatsAppMonthlyLimit)
@@ -69,7 +71,13 @@ jobs:
 
           [ -n "$PNID" ] && ok "Phone number ID: \`$PNID\`" || bad "Falta Notifications__WhatsAppPhoneNumberId (corre *Configure WhatsApp notifications*)."
           [ -n "$TO" ] && ok "Destinatario: \`$TO\`" || bad "Falta Notifications__WhatsAppTo."
-          [ -n "$TOKREF" ] && ok "Token: configurado (\`$TOKREF\`)" || bad "Falta Notifications__WhatsAppAccessToken."
+          if [ -z "$TOKREF" ]; then
+            bad "Falta la variable Notifications__WhatsAppAccessToken (corre *Configure WhatsApp notifications*)."
+          elif [[ "$TOKREF" == secret:* ]] && ! echo " $SECRETS " | grep -q " ${TOKREF#secret:} "; then
+            bad "Notifications__WhatsAppAccessToken apunta al secret \`${TOKREF#secret:}\`, que no existe en el Container App (corre *Configure* otra vez)."
+          else
+            ok "Token: configurado (\`$TOKREF\`)"
+          fi
           info "Idioma de plantillas: \`$LANG_CODE\` · tope mensual: \`${LIMIT:-100 (por defecto)}\`"
           [ "${LIMIT:-100}" = "0" ] && bad "El tope mensual es 0: no se envía ningún WhatsApp."
 
@@ -102,10 +110,12 @@ jobs:
           if [ -n "$TOKEN" ]; then
             R=$(curl -s "$GRAPH/$WABA_ID/message_templates?fields=name,status,language,category&limit=100" -H "Authorization: Bearer $TOKEN")
             if echo "$R" | jq -e '.data' >/dev/null 2>&1; then
+              NAMES=$(echo "$R" | jq -r '[.data[] | "\(.name) (\(.language), \(.status))"] | join(", ")')
+              info "Plantillas que Meta ve en la cuenta \`$WABA_ID\`: ${NAMES:-ninguna}"
               for T in "$BOOKED" "$CANCELLED"; do
                 ROWS=$(echo "$R" | jq -r --arg t "$T" '.data[] | select(.name==$t) | "\(.language) \(.status) \(.category)"')
                 if [ -z "$ROWS" ]; then
-                  bad "No existe la plantilla \`$T\`. Créala en WhatsApp Manager → Plantillas de mensajes."
+                  bad "No existe la plantilla \`$T\` en la cuenta \`$WABA_ID\`. Créala en WhatsApp Manager → Plantillas de mensajes (con esa cuenta elegida arriba)."
                   continue
                 fi
                 while read -r L ST CAT; do
