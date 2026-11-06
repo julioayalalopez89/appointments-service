@@ -53,6 +53,14 @@ jobs:
           [[ "$TO" =~ ^\+[0-9]{8,15}$ ]] || { echo "::error::to debe ser +<código><número>, sin espacios (ej. +17865662770)."; exit 1; }
           [[ "$LIMIT" =~ ^[0-9]+$ ]] || { echo "::error::monthly_limit debe ser un número."; exit 1; }
 
+          # Que Meta reconozca el Phone number ID con este token antes de guardarlo.
+          R=$(curl -s "https://graph.facebook.com/v25.0/$PHONE_NUMBER_ID?fields=display_phone_number" -H "Authorization: Bearer $TOKEN")
+          if ! echo "$R" | jq -e '.display_phone_number' >/dev/null; then
+            echo "::error::Meta no reconoce el Phone number ID $PHONE_NUMBER_ID con este token: $(echo "$R" | jq -r '.error.message // .'). Usa el 'Phone Number ID' de Paso 1. Probar (no el ID de la app ni del negocio)."
+            exit 1
+          fi
+          echo "Número que envía: $(echo "$R" | jq -r '.display_phone_number')"
+
       - name: Log in to Azure (OIDC)
         uses: azure/login@v2
         with:
